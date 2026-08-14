@@ -27,6 +27,27 @@ The inspector also warns when a relation points to a memo that is not among the 
 
 The test fixture under `backend/tests/fixtures/memos_export_v1.json` is synthetic. CI uses it only to prove that the read-only inspector and schema contract continue to work; it is not copied from production Notes data.
 
+## Provider-Neutral Migration Manifest
+
+After an export passes metadata validation, the native tools can emit a deterministic GoreeCloud-owned migration manifest without writing to either source or target:
+
+```bash
+cd backend
+python -m app.migration build-memos-manifest /path/to/goreecloud-notes-YYYY-MM-DD.json > migration-manifest.json
+```
+
+The manifest uses `format: goreecloud-notes-migration` and `schemaVersion: 1`. It carries the validated source export SHA-256, byte size, source format/schema, and export timestamp forward so later importer evidence can be tied to one exact source artifact. It does not include a local source pathname, current wall-clock generation timestamp, target UUID, database identifier, or other environment-specific value that would make the same source artifact produce a different logical manifest.
+
+Each normalized note record preserves the original Memos name, UID, source order, source state and restore target; title and Markdown; a SHA-256 of the exact Markdown bytes; normalized active/archived/trashed lifecycle state; pin state; visibility, color, tags, timestamps, and location; attachment metadata; and relations. Each record also carries a deterministic SHA-256 over its normalized representation for later source/target equivalence work.
+
+Local attachment metadata is represented with `binary.status: required` and **no invented binary checksum or verified byte size**. External-link attachments use `binary.status: external`. A later protected extraction step must supply independently verified local attachment bytes and checksums before any importer may claim attachment completeness.
+
+Relations retain their source type and target source memo identity. The manifest records whether the target is present among exported top-level notes, but does not silently delete unresolved relationships or invent target-native identifiers.
+
+Manifest generation refuses metadata-invalid exports. It also rechecks the source export byte length and SHA-256 after validation and fails if the source file changed during the operation. The command writes only JSON to standard output; any destination file is chosen by the operator or shell redirection.
+
+This manifest is a provider-neutral **migration boundary**, not a native database dump and not an authorization to import. The later persistence importer should accept this versioned boundary rather than receiving privileged direct access to Memos-specific objects.
+
 ## Data to Preserve
 
 Before cutover, inventory and preserve at least:
@@ -47,17 +68,18 @@ Before cutover, inventory and preserve at least:
 1. Protect and inventory the source database and attachment storage.
 2. Create an isolated copy for importer development.
 3. Validate and fingerprint a GoreeCloud/Memos schema-v1 JSON export with the native read-only inspector.
-4. Recover local attachment binary content from an approved protected source copy or authenticated extraction path and produce verifiable byte/checksum evidence; do not assume the JSON export contains those bytes.
-5. Extract source records into a versioned provider-neutral migration representation.
-6. Validate required fields, ownership, identifiers, timestamps, note state, and attachment references before persistence.
-7. Import into a clean native target.
-8. Compare source/target counts and selected content checksums/metadata.
-9. Validate native search and export behavior.
-10. Validate attachment retrieval and checksums.
-11. Perform user-facing acceptance testing.
-12. Create current backups of both source and target before any production cutover.
-13. Move `notes.goreecloud.com` only through a controlled, reversible publication change.
-14. Retain the source environment until rollback is no longer required and retirement is explicitly approved.
+4. Generate and preserve the deterministic provider-neutral migration manifest tied to that exact source fingerprint.
+5. Recover local attachment binary content from an approved protected source copy or authenticated extraction path and produce verifiable byte/checksum evidence; do not assume the JSON export contains those bytes.
+6. Reconcile unresolved relations and any documented migration exceptions without rewriting the source.
+7. Validate required fields, ownership mapping, identifiers, timestamps, lifecycle state, and attachment references before persistence.
+8. Import the provider-neutral manifest into a clean disposable native target only after the importer has its own authorization and rollback tests.
+9. Compare source/manifest/target counts and selected content hashes/metadata.
+10. Validate native search and export behavior.
+11. Validate attachment retrieval and checksums.
+12. Perform user-facing acceptance testing.
+13. Create current backups of both source and target before any production cutover.
+14. Move `notes.goreecloud.com` only through a controlled, reversible publication change.
+15. Retain the source environment until rollback is no longer required and retirement is explicitly approved.
 
 ## Evernote Import
 
@@ -65,6 +87,6 @@ Evernote ENEX import is a separate Milestone 3 capability. It should normalize i
 
 ## Validation Evidence
 
-A migration is not considered successful because the importer exits without an error. Evidence must include source/target record counts, ownership checks, selected note-content comparison, state/metadata comparison, attachment validation, searchability, exportability, and documented exceptions.
+A migration is not considered successful because an inspector, manifest generator, or future importer exits without an error. Evidence must include source/manifest/target record counts, ownership checks, selected note-content comparison, lifecycle/metadata comparison, attachment validation, searchability, exportability, and documented exceptions.
 
-A green export-inspection report is only the first migration-readiness checkpoint. It validates the JSON metadata envelope and produces a deterministic source fingerprint; it does not import records, prove binary attachment availability, prove target equivalence, authorize cutover, or permit retirement of the transitional Memos environment.
+A green export-inspection report plus deterministic manifest is still only migration-readiness evidence. It does not prove binary attachment availability, target persistence equivalence, production backup readiness, authorize cutover, or permit retirement of the transitional Memos environment.

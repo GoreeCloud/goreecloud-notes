@@ -7,7 +7,18 @@ import json
 import sys
 from pathlib import Path
 
+from .manifest import build_memos_manifest, serialize_manifest
 from .memos import DEFAULT_MAX_EXPORT_BYTES, format_text_report, inspect_memos_export
+
+
+def _add_export_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("export", type=Path, help="Path to a GoreeCloud Notes full-library JSON export.")
+    parser.add_argument(
+        "--max-bytes",
+        type=int,
+        default=DEFAULT_MAX_EXPORT_BYTES,
+        help=f"Maximum JSON export size to inspect (default: {DEFAULT_MAX_EXPORT_BYTES} bytes).",
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -18,14 +29,14 @@ def build_parser() -> argparse.ArgumentParser:
         "inspect-memos-export",
         help="Validate and inventory a GoreeCloud Notes schema-v1 JSON export without importing or mutating data.",
     )
-    inspect.add_argument("export", type=Path, help="Path to a GoreeCloud Notes full-library JSON export.")
+    _add_export_arguments(inspect)
     inspect.add_argument("--json", action="store_true", help="Emit a machine-readable inventory report.")
-    inspect.add_argument(
-        "--max-bytes",
-        type=int,
-        default=DEFAULT_MAX_EXPORT_BYTES,
-        help=f"Maximum JSON export size to inspect (default: {DEFAULT_MAX_EXPORT_BYTES} bytes).",
+
+    manifest = subparsers.add_parser(
+        "build-memos-manifest",
+        help="Emit a deterministic provider-neutral migration manifest from a validated schema-v1 export.",
     )
+    _add_export_arguments(manifest)
     return parser
 
 
@@ -37,17 +48,24 @@ def main() -> int:
         parser.error("--max-bytes must be positive.")
 
     try:
-        report = inspect_memos_export(args.export, max_bytes=args.max_bytes)
+        if args.command == "inspect-memos-export":
+            report = inspect_memos_export(args.export, max_bytes=args.max_bytes)
+            if args.json:
+                print(json.dumps(report.to_dict(), indent=2, sort_keys=True))
+            else:
+                print(format_text_report(report))
+            return 0 if report.metadata_valid else 3
+
+        if args.command == "build-memos-manifest":
+            manifest = build_memos_manifest(args.export, max_bytes=args.max_bytes)
+            sys.stdout.write(serialize_manifest(manifest))
+            return 0
     except (OSError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
 
-    if args.json:
-        print(json.dumps(report.to_dict(), indent=2, sort_keys=True))
-    else:
-        print(format_text_report(report))
-
-    return 0 if report.metadata_valid else 3
+    parser.error(f"Unsupported command: {args.command}")
+    return 2
 
 
 if __name__ == "__main__":

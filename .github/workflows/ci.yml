@@ -47,6 +47,11 @@ jobs:
           python -m app.migration inspect-memos-export tests/fixtures/memos_export_v1.json --json > /tmp/goreecloud-memos-export-report.json
           python -c 'import json; report=json.load(open("/tmp/goreecloud-memos-export-report.json")); assert report["validation"]["metadataValid"] is True; assert report["validation"]["sourceMutationPerformed"] is False; assert report["inventory"]["notes"] == 2; assert report["inventory"]["localAttachmentMetadata"] == 1; assert report["validation"]["attachmentBinaryRecoveryRequired"] is True'
 
+      - name: Validate provider-neutral Memos migration manifest
+        run: |
+          python -m app.migration build-memos-manifest tests/fixtures/memos_export_v1.json > /tmp/goreecloud-migration-manifest.json
+          python -c 'import json; manifest=json.load(open("/tmp/goreecloud-migration-manifest.json")); assert manifest["format"] == "goreecloud-notes-migration"; assert manifest["schemaVersion"] == 1; assert manifest["validation"]["sourceMutationPerformed"] is False; assert manifest["validation"]["targetMutationPerformed"] is False; assert manifest["notes"][0]["attachments"][0]["binary"] == {"status":"required","sha256":None,"verifiedSizeBytes":None}; assert manifest["notes"][1]["lifecycle"]["state"] == "trashed"; assert manifest["notes"][1]["lifecycle"]["restoreTarget"] == "archived"'
+
   frontend:
     name: Frontend lint and build
     runs-on: ubuntu-latest
