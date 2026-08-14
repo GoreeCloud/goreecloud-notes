@@ -9,11 +9,13 @@ from app.database import Base
 def test_native_core_tables_are_registered() -> None:
     assert set(Base.metadata.tables) == {
         "attachments",
+        "auth_sessions",
         "note_revisions",
         "note_tags",
         "notebooks",
         "notes",
         "tags",
+        "user_credentials",
         "users",
     }
 
@@ -29,6 +31,17 @@ def test_user_owned_entities_keep_explicit_owner_scope() -> None:
     ):
         owner = Base.metadata.tables[table_name].c.owner_id
         assert owner.nullable is False
+
+
+def test_authentication_tables_do_not_store_raw_browser_secrets() -> None:
+    sessions = Base.metadata.tables["auth_sessions"]
+    credentials = Base.metadata.tables["user_credentials"]
+
+    assert {"token_hash", "csrf_token_hash", "expires_at", "user_id"}.issubset(sessions.c.keys())
+    assert "token" not in sessions.c
+    assert "csrf_token" not in sessions.c
+    assert "password_hash" in credentials.c
+    assert "password" not in credentials.c
 
 
 def test_note_state_is_native_not_hidden_content_metadata() -> None:
