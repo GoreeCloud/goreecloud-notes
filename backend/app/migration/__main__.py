@@ -1,4 +1,4 @@
-"""Command-line entry point for non-destructive GoreeCloud Notes migration tools."""
+"""Command-line entry point for controlled GoreeCloud Notes migration tools."""
 
 from __future__ import annotations
 
@@ -6,8 +6,22 @@ import argparse
 import json
 import sys
 from pathlib import Path
+from uuid import UUID
 
+from sqlalchemy import select
+
+from ..auth import normalize_username
+from ..config import get_settings
+from ..database import SessionLocal
+from ..models import User
 from .evidence import DEFAULT_MAX_MANIFEST_BYTES, serialize_evidence, verify_attachment_binaries
+from .importer import (
+    DEFAULT_MAX_INPUT_BYTES,
+    MigrationImportError,
+    import_memos_manifest,
+    serialize_import_result,
+    verify_imported_memos_data,
+)
 from .manifest import build_memos_manifest, serialize_manifest
 from .memos import DEFAULT_MAX_EXPORT_BYTES, format_text_report, inspect_memos_export
 
@@ -22,8 +36,26 @@ def _add_export_arguments(parser: argparse.ArgumentParser) -> None:
     )
 
 
+def _target_user(username: str) -> User:
+    normalized = normalize_username(username)
+    if not normalized:
+        raise MigrationImportError("Target username must not be empty.")
+    with SessionLocal() as db:
+        user = db.scalar(select(User).where(User.username_normalized == normalized))
+        if user is None:
+            raise MigrationImportError("Target GoreeCloud Notes account was not found.")
+        # Return a detached identity object containing scalar values only.
+        db.expunge(user)
+        return user
+
+
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="GoreeCloud Notes read-only migration tools")
+    parser = argparse.ArgumentParser(
+        description=(
+            "GoreeCloud Notes migration tools. Inspection, manifest, evidence, and verification commands are read-only. "
+            "The import command writes only to an explicitly confirmed empty native account and never connects to Memos."
+        )
+    )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     inspect = subparsers.add_parser(
@@ -52,6 +84,36 @@ def build_parser() -> argparse.ArgumentParser:
         default=DEFAULT_MAX_MANIFEST_BYTES,
         help=f"Maximum manifest/map JSON size (default: {DEFAULT_MAX_MANIFEST_BYTES} bytes).",
     )
+
+    importer = subparsers.add_parser(
+        "import-memos-manifest",
+        help=(
+            "Persist one validated manifest/evidence set into an explicitly confirmed empty native account. "
+            "This command writes target data but never connects to or mutates Memos."
+        ),
+    )
+    importer.add_argument("manifest", type=Path)
+    importer.add_argument("evidence", type=Path)
+    importer.add_argument("evidence_root", type=Path)
+    importer.add_argument("--username", required=True, help="Existing empty native target account.")
+    importer.add_argument(
+        "--confirm-empty-target",
+        action="store_true",
+        help="Required explicit acknowledgement that this command may write to the selected empty target account.",
+    )
+    importer.add_argument(
+        "--max-input-bytes",
+        type=int,
+        default=DEFAULT_MAX_INPUT_BYTES,
+        help=f"Maximum size of each manifest/evidence JSON input (default: {DEFAULT_MAX_INPUT_BYTES} bytes).",
+    )
+
+    verify_import = subparsers.add_parser(
+        "verify-memos-import",
+        help="Read-only verification of persisted native notes, provenance, tag assignments, and attachment-byte integrity.",
+    )
+    verify_import.add_argument("--username", required=True)
+    verify_import.add_argument("--import-id", required=True, type=UUID)
     return parser
 
 
@@ -63,6 +125,10 @@ def main() -> int:
         parser.error("--max-bytes must be positive.")
     if args.command == "verify-attachment-binaries" and args.max_manifest_bytes <= 0:
         parser.error("--max-manifest-bytes must be positive.")
+    if args.command == "import-memos-manifest" and args.max_input_bytes <= 0:
+        parser.error("--max-input-bytes must be positive.")
+    if args.command == "import-memos-manifest" and not args.confirm_empty_target:
+        parser.error("--confirm-empty-target is required for the target-writing import command.")
 
     try:
         if args.command == "inspect-memos-export":
@@ -87,7 +153,37 @@ def main() -> int:
             )
             sys.stdout.write(serialize_evidence(evidence))
             return 0 if evidence["verification"]["complete"] else 4
-    except (OSError, ValueError) as exc:
+
+        if args.command == "import-memos-manifest":
+            owner = _target_user(args.username)
+            settings = get_settings()
+            with SessionLocal() as db:
+                result = import_memos_manifest(
+                    db,
+                    owner=owner,
+                    manifest_path=args.manifest,
+                    evidence_path=args.evidence,
+                    evidence_root=args.evidence_root,
+                    attachment_root=Path(settings.attachment_root),
+                    attachment_max_bytes=settings.attachment_max_bytes,
+                    max_input_bytes=args.max_input_bytes,
+                )
+            sys.stdout.write(serialize_import_result(result))
+            return 0
+
+        if args.command == "verify-memos-import":
+            owner = _target_user(args.username)
+            settings = get_settings()
+            with SessionLocal() as db:
+                result = verify_imported_memos_data(
+                    db,
+                    owner=owner,
+                    import_id=args.import_id,
+                    attachment_root=Path(settings.attachment_root),
+                )
+            sys.stdout.write(serialize_import_result(result))
+            return 0
+    except (OSError, ValueError, MigrationImportError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
 
