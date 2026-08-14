@@ -1,6 +1,6 @@
 # Account Security and Credential Recovery
 
-GoreeCloud Notes keeps account identity, password credentials, browser sessions, temporary login-abuse state, and portable user-data export concerns separate. This document records the Milestone 0 password-rotation, administrative-recovery, bounded login-protection, and Account & Security browser behavior implemented on the native development branch.
+GoreeCloud Notes keeps account identity, password credentials, browser sessions, temporary login-abuse state, and portable user-data export concerns separate. This document records the Milestone 0 password-rotation, browser-session management, administrative-recovery, bounded login-protection, and Account & Security browser behavior implemented on the native development branch.
 
 ## Password Policy
 
@@ -18,13 +18,44 @@ The Glaze UI exposes the authenticated account-security surface at:
 
 The Notes workspace provides an **Account & Security** launcher that opens the page in a separate browser tab. This is deliberate while the editor uses explicit conflict-safe Save rather than autosave: opening account settings must not unmount the current Notes workspace and silently discard an unsaved draft.
 
-Before exposing authenticated controls, the page calls the existing `/api/v1/auth/me` boundary and confirms that the browser still has a live server-side session. The page shows the current account identity and does not expose password controls to an unauthenticated browser.
+Before exposing authenticated controls, the page calls the existing `/api/v1/auth/me` boundary and confirms that the browser still has a live server-side session. The page shows the current account identity and does not expose password, session-management, or portability controls to an unauthenticated browser.
 
 The password form uses browser `current-password` and `new-password` autocomplete semantics and keeps current, replacement, and confirmation values only in React component state. The client checks the same 12-to-1,024-character password boundary enforced by the server, rejects a mismatched confirmation, and rejects obvious current-password reuse before submission. The backend remains authoritative for all credential validation and mutation.
 
-If a password change succeeds, every account session has already been revoked by the server and the current browser cookies have already been expired. The page therefore clears its local password state and returns to a sign-in-required state instead of issuing a misleading second logout request.
+If a password change succeeds, every account session has already been revoked by the server and the current browser cookies have already been expired. The page therefore clears its local password and session state and returns to a sign-in-required state instead of issuing a misleading second logout request.
 
 The same page also exposes the user-facing **Download full library** portability control. That operation is independently authenticated and CSRF protected, uses the existing verified portable-export layer, and does not require the user to enter a password into the export workflow. Portable-export details and exclusions are documented in `docs/portable-export.md`.
+
+## Browser Session Review and Selective Revocation
+
+Authenticated users can review the active server-side sessions for their own account with:
+
+```text
+GET /api/v1/auth/sessions
+```
+
+The response is owner-scoped and contains only:
+
+- the server-generated session UUID;
+- the session creation timestamp;
+- the session expiration timestamp; and
+- whether the record is the session currently authenticating the request.
+
+The endpoint does not expose raw session tokens, CSRF secrets, stored secret digests, password material, another user's sessions, or login-rate state. The session-management design also deliberately avoids collecting or persisting browser fingerprints, user-agent history, device names, or IP-address history merely to make the session list more descriptive. This keeps the control useful without creating a new surveillance-style metadata store.
+
+Only unexpired sessions are returned. The response uses `Cache-Control: no-store`.
+
+An authenticated user can sign out every other active browser session while preserving the session used to issue the request with:
+
+```text
+POST /api/v1/auth/sessions/revoke-others
+```
+
+This state-changing endpoint requires the normal matching CSRF cookie/header pair. It is owner-scoped, never accepts an arbitrary user ID, excludes the current session, and deletes only other unexpired sessions for the authenticated account. The response reports the number of active sessions revoked and uses `Cache-Control: no-store`.
+
+The Glaze UI Account & Security page presents the current session separately from other active sessions, displays start and expiration times, and disables the selective-revocation control when no other active session exists. After a successful selective revocation, the browser reloads the authoritative session list so the UI is not treated as the source of truth.
+
+Selective revocation is intentionally different from password rotation. Signing out other sessions preserves the current credential and browser session; changing the password remains a higher-impact security action that revokes every session, including the current one.
 
 ## Authenticated Password Rotation
 
@@ -88,11 +119,15 @@ For an accepted trusted-proxy chain, GoreeCloud Notes selects the rightmost untr
 
 The live Compose authentication/security gates must prove all of the following before this behavior is accepted:
 
-- two simultaneous sessions can authenticate before password rotation;
+- two simultaneous sessions can authenticate;
+- the owning account can list those active sessions and exactly one is identified as current;
+- selective other-session revocation without CSRF is rejected;
+- CSRF-protected selective revocation removes the other active session while preserving the current session;
+- the session list immediately reflects the resulting one-session state;
 - password rotation without CSRF is rejected;
 - an incorrect current password is rejected without mutation;
 - reusing the current password as the replacement is rejected;
-- successful rotation revokes both the initiating session and another concurrent session;
+- successful rotation revokes the initiating session and any remaining concurrent sessions;
 - the old password no longer authenticates;
 - the rotated password does authenticate;
 - administrative CLI reset revokes the newly authenticated session;
@@ -111,6 +146,6 @@ The live Compose authentication/security gates must prove all of the following b
 
 ## Remaining Production Security Gates
 
-This Milestone 0 work does **not** make the authentication system production-ready by itself. Remaining work includes production publication-layer abuse controls, final administrator/account lifecycle controls, monitoring and audit requirements, session visibility/revocation UI if justified, final deployment/session policy, backup/restore handling for credential/session/rate state, and private-publication validation.
+This Milestone 0 work does **not** make the authentication system production-ready by itself. Remaining work includes production publication-layer abuse controls, broader final administrator/account lifecycle controls, monitoring and audit requirements, final deployment/session lifetime policy, backup/restore handling for credential/session/rate state, and private-publication validation.
 
 Any future self-service recovery mechanism must be designed separately. It must not silently add email, SMS, hosted identity, or third-party recovery dependencies to the GoreeCloud Notes core product.
