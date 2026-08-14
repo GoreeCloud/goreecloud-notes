@@ -31,10 +31,10 @@ export type NoteDocument = {
 };
 
 export type TiptapNode = {
-  type?: string;
+  type: string;
   text?: string;
   attrs?: Record<string, unknown>;
-  marks?: Array<{ type?: string; attrs?: Record<string, unknown> }>;
+  marks?: Array<{ type: string; attrs?: Record<string, unknown> }>;
   content?: TiptapNode[];
 };
 
@@ -167,8 +167,8 @@ export function goreeToTiptap(document: NoteDocument): TiptapNode {
 }
 
 function tiptapNodeToGoree(node: TiptapNode): GoreeNode | null {
-  const type = node.type as GoreeNodeType | undefined;
-  if (!type || !supportedNodes.has(type)) {
+  const type = node.type as GoreeNodeType;
+  if (!supportedNodes.has(type)) {
     return null;
   }
 
