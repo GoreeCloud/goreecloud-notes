@@ -6,15 +6,22 @@ import argparse
 import getpass
 import json
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from .attachment_audit import audit_user_attachment_store
-from .auth import hash_password, normalize_username, replace_user_password, validate_password
+from .auth import (
+    hash_password,
+    normalize_username,
+    replace_user_password,
+    set_user_active_state,
+    validate_password,
+)
 from .config import get_settings
 from .database import SessionLocal
-from .models import User, UserCredential
+from .models import AuthSession, User, UserCredential
 from .native_import import NativeImportError, import_native_library
 from .portability import ExportError, verify_export_bundle
 from .portability_migration import export_user_library_with_provenance
@@ -31,6 +38,13 @@ def _read_password(password_stdin: bool) -> str:
 
     validate_password(password)
     return password
+
+
+def _normalized_required_username(username: str) -> str:
+    normalized = normalize_username(username)
+    if not normalized:
+        raise ValueError("Username must not be empty.")
+    return normalized
 
 
 def create_user(*, username: str, display_name: str, password_stdin: bool) -> None:
@@ -65,13 +79,88 @@ def create_user(*, username: str, display_name: str, password_stdin: bool) -> No
     print(f"Created GoreeCloud Notes account: {clean_username}")
 
 
+def account_status(*, username: str, json_output: bool) -> None:
+    """Report non-sensitive lifecycle state for one private account."""
+
+    normalized = _normalized_required_username(username)
+    now = datetime.now(UTC)
+
+    with SessionLocal() as db:
+        user = db.scalar(select(User).where(User.username_normalized == normalized))
+        if user is None:
+            raise ValueError("Account not found.")
+
+        active_sessions = db.scalar(
+            select(func.count())
+            .select_from(AuthSession)
+            .where(
+                AuthSession.user_id == user.id,
+                AuthSession.expires_at > now,
+            )
+        )
+        result = {
+            "schemaVersion": 1,
+            "username": user.username,
+            "displayName": user.display_name,
+            "isActive": bool(user.is_active),
+            "activeSessions": int(active_sessions or 0),
+        }
+
+    if json_output:
+        print(json.dumps(result, ensure_ascii=False, sort_keys=True, separators=(",", ":")))
+        return
+
+    print(f"Account: {result['username']}")
+    print(f"Display name: {result['displayName']}")
+    print(f"Active: {'yes' if result['isActive'] else 'no'}")
+    print(f"Active browser sessions: {result['activeSessions']}")
+
+
+def set_account_active(*, username: str, is_active: bool, confirm_disable: bool) -> None:
+    """Enable or disable one account without deleting its credentials or user data."""
+
+    if not is_active and not confirm_disable:
+        raise ValueError("Disabling an account requires --confirm-disable.")
+
+    normalized = _normalized_required_username(username)
+    with SessionLocal() as db:
+        user = db.scalar(select(User).where(User.username_normalized == normalized))
+        if user is None:
+            raise ValueError("Account not found.")
+
+        account_name = user.username
+        changed, revoked_sessions = set_user_active_state(db, user=user, is_active=is_active)
+        db.commit()
+
+    if is_active:
+        if changed:
+            print(
+                f"Enabled GoreeCloud Notes account: {account_name}; "
+                f"revoked {revoked_sessions} stale session(s); fresh sign-in required."
+            )
+        else:
+            print(
+                f"GoreeCloud Notes account already enabled: {account_name}; "
+                f"revoked {revoked_sessions} stale session(s); fresh sign-in required."
+            )
+        return
+
+    if changed:
+        print(
+            f"Disabled GoreeCloud Notes account: {account_name}; "
+            f"revoked {revoked_sessions} session(s); account data preserved."
+        )
+    else:
+        print(
+            f"GoreeCloud Notes account already disabled: {account_name}; "
+            f"revoked {revoked_sessions} stale session(s); account data preserved."
+        )
+
+
 def reset_password(*, username: str, password_stdin: bool) -> None:
     """Replace one account password and revoke all existing browser sessions."""
 
-    normalized = normalize_username(username)
-    if not normalized:
-        raise ValueError("Username must not be empty.")
-
+    normalized = _normalized_required_username(username)
     password = _read_password(password_stdin)
 
     with SessionLocal() as db:
@@ -89,10 +178,7 @@ def reset_password(*, username: str, password_stdin: bool) -> None:
 def audit_attachments(*, username: str, json_output: bool) -> bool:
     """Read and verify one account's attachment metadata and owner-scoped bytes."""
 
-    normalized = normalize_username(username)
-    if not normalized:
-        raise ValueError("Username must not be empty.")
-
+    normalized = _normalized_required_username(username)
     settings = get_settings()
     with SessionLocal() as db:
         user = db.scalar(select(User).where(User.username_normalized == normalized))
@@ -128,10 +214,7 @@ def audit_attachments(*, username: str, json_output: bool) -> bool:
 def export_library(*, username: str, output: str, overwrite: bool) -> None:
     """Create a complete verified native library bundle, including migration provenance."""
 
-    normalized = normalize_username(username)
-    if not normalized:
-        raise ValueError("Username must not be empty.")
-
+    normalized = _normalized_required_username(username)
     settings = get_settings()
     output_path = Path(output)
     with SessionLocal() as db:
@@ -161,9 +244,7 @@ def import_library(*, username: str, input_path: str, confirm_empty_target: bool
         raise ValueError(
             "Native re-import requires --confirm-empty-target; merging into an existing library is not supported."
         )
-    normalized = normalize_username(username)
-    if not normalized:
-        raise ValueError("Username must not be empty.")
+    normalized = _normalized_required_username(username)
 
     settings = get_settings()
     with SessionLocal() as db:
@@ -222,6 +303,35 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Read one password line from standard input instead of prompting interactively.",
     )
+
+    status_command = subparsers.add_parser(
+        "account-status",
+        help="Report one private account's non-sensitive active state and active-session count.",
+    )
+    status_command.add_argument("--username", required=True)
+    status_command.add_argument(
+        "--json",
+        action="store_true",
+        dest="json_output",
+        help="Emit machine-readable non-sensitive account lifecycle state.",
+    )
+
+    disable = subparsers.add_parser(
+        "disable-user",
+        help="Disable one private account and revoke every browser session without deleting account data.",
+    )
+    disable.add_argument("--username", required=True)
+    disable.add_argument(
+        "--confirm-disable",
+        action="store_true",
+        help="Required explicit acknowledgement before disabling the selected account.",
+    )
+
+    enable = subparsers.add_parser(
+        "enable-user",
+        help="Re-enable one private account while requiring a fresh browser sign-in.",
+    )
+    enable.add_argument("--username", required=True)
 
     reset = subparsers.add_parser(
         "reset-password",
@@ -302,6 +412,20 @@ def main() -> int:
                 username=args.username,
                 display_name=args.display_name,
                 password_stdin=args.password_stdin,
+            )
+        elif args.command == "account-status":
+            account_status(username=args.username, json_output=args.json_output)
+        elif args.command == "disable-user":
+            set_account_active(
+                username=args.username,
+                is_active=False,
+                confirm_disable=args.confirm_disable,
+            )
+        elif args.command == "enable-user":
+            set_account_active(
+                username=args.username,
+                is_active=True,
+                confirm_disable=False,
             )
         elif args.command == "reset-password":
             reset_password(
