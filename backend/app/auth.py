@@ -9,6 +9,7 @@ from hashlib import sha256, scrypt
 from hmac import compare_digest
 from secrets import token_bytes, token_urlsafe
 from unicodedata import normalize
+from uuid import UUID
 
 from fastapi import Depends, HTTPException, Request, Response, status
 from sqlalchemy import delete, select
@@ -21,6 +22,8 @@ from .models import AuthSession, User, UserCredential
 SESSION_COOKIE_NAME = "goreecloud_notes_session"
 CSRF_COOKIE_NAME = "goreecloud_notes_csrf"
 CSRF_HEADER_NAME = "X-CSRF-Token"
+MIN_PASSWORD_LENGTH = 12
+MAX_PASSWORD_LENGTH = 1024
 
 _SCRYPT_N = 32_768
 _SCRYPT_R = 8
@@ -53,6 +56,15 @@ def normalize_username(username: str) -> str:
     return normalize("NFKC", username).strip().casefold()
 
 
+def validate_password(password: str) -> None:
+    """Enforce the shared password boundary used by API and CLI mutations."""
+
+    if len(password) < MIN_PASSWORD_LENGTH:
+        raise ValueError(f"Password must contain at least {MIN_PASSWORD_LENGTH} characters.")
+    if len(password) > MAX_PASSWORD_LENGTH:
+        raise ValueError(f"Password must not exceed {MAX_PASSWORD_LENGTH} characters.")
+
+
 def _encode_bytes(value: bytes) -> str:
     return urlsafe_b64encode(value).rstrip(b"=").decode("ascii")
 
@@ -65,8 +77,7 @@ def _decode_bytes(value: str) -> bytes:
 def hash_password(password: str) -> str:
     """Hash a password using salted scrypt and a versioned storage envelope."""
 
-    if not password:
-        raise ValueError("Password must not be empty.")
+    validate_password(password)
 
     salt = token_bytes(16)
     derived = scrypt(
@@ -127,6 +138,42 @@ def secret_digest(secret: str) -> str:
     return sha256(secret.encode("utf-8")).hexdigest()
 
 
+def _credential_for_user(db: Session, user_id: UUID) -> UserCredential | None:
+    return db.scalar(select(UserCredential).where(UserCredential.user_id == user_id))
+
+
+def verify_user_password(db: Session, *, user: User, password: str) -> bool:
+    """Verify one authenticated user's current password."""
+
+    credential = _credential_for_user(db, user.id)
+    return credential is not None and verify_password(password, credential.password_hash)
+
+
+def revoke_user_sessions(db: Session, *, user_id: UUID) -> None:
+    """Revoke every server-side browser session for one account."""
+
+    db.execute(delete(AuthSession).where(AuthSession.user_id == user_id))
+
+
+def replace_user_password(db: Session, *, user: User, new_password: str) -> None:
+    """Replace credential material and revoke every existing browser session.
+
+    This primitive is shared by authenticated password rotation and the private
+    administrative CLI recovery path. It intentionally does not commit so the
+    caller controls transaction boundaries.
+    """
+
+    validate_password(new_password)
+    credential = _credential_for_user(db, user.id)
+    if credential is None:
+        raise ValueError("Account credential is unavailable.")
+
+    credential.password_hash = hash_password(new_password)
+    credential.password_changed_at = datetime.now(UTC)
+    revoke_user_sessions(db, user_id=user.id)
+    db.flush()
+
+
 def authenticate_user(db: Session, *, username: str, password: str) -> User | None:
     """Authenticate one active account with a generic failure path."""
 
@@ -143,7 +190,12 @@ def authenticate_user(db: Session, *, username: str, password: str) -> User | No
     if row is None:
         # Preserve a similar expensive password-hash path for unknown users so a
         # login endpoint does not become a cheap username-existence oracle.
-        hash_password(password)
+        try:
+            hash_password(password)
+        except ValueError:
+            # Login accepts legacy/short attempted values only to follow the same
+            # generic failure path; new credentials always use validate_password.
+            pass
         return None
 
     user, credential = row
