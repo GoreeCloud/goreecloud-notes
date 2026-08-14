@@ -2,28 +2,32 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 
 import {
   ApiError,
+  assignNoteTag,
+  createNotebook,
   createNote,
+  createTag,
+  deleteNotebook,
+  deleteTag,
   documentToText,
   getCurrentUser,
+  listNotebooks,
   listNotes,
+  listNoteTags,
+  listTags,
   login as loginRequest,
   logout as logoutRequest,
+  removeNoteTag,
   textToDocument,
   trashNote,
   updateNote,
   type CurrentUser,
   type Note,
+  type Notebook,
+  type NoteState,
+  type Tag,
 } from "./api";
 
-const navigation = [
-  "Home",
-  "All Notes",
-  "Notebooks",
-  "Tags",
-  "Shortcuts",
-  "Archive",
-  "Trash",
-];
+type WorkspaceView = "home" | "notebook" | "tag" | "archive" | "trash" | "notebooks" | "tags";
 
 function SourceLink() {
   return (
@@ -126,17 +130,28 @@ function App() {
   const [authState, setAuthState] = useState<"loading" | "authenticated" | "unauthenticated">("loading");
   const [user, setUser] = useState<CurrentUser | null>(null);
   const [notes, setNotes] = useState<Note[]>([]);
+  const [notebooks, setNotebooks] = useState<Notebook[]>([]);
+  const [tags, setTags] = useState<Tag[]>([]);
+  const [activeNoteTags, setActiveNoteTags] = useState<Tag[]>([]);
+  const [view, setView] = useState<WorkspaceView>("home");
+  const [filterId, setFilterId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
+  const [editorNotebookId, setEditorNotebookId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [saveState, setSaveState] = useState("Saved");
+  const [newNotebookName, setNewNotebookName] = useState("");
+  const [newNotebookParent, setNewNotebookParent] = useState<string>("");
+  const [newTagName, setNewTagName] = useState("");
 
   const selectedNote = notes.find((note) => note.id === selectedId) ?? null;
   const dirty = selectedNote
-    ? selectedNote.title !== title || documentToText(selectedNote.document) !== body
+    ? selectedNote.title !== title ||
+      documentToText(selectedNote.document) !== body ||
+      selectedNote.notebook_id !== editorNotebookId
     : false;
 
   const visibleNotes = useMemo(() => {
@@ -151,28 +166,80 @@ function App() {
     });
   }, [notes, search]);
 
-  function openNote(note: Note | null) {
+  const currentNotebook = view === "notebook" ? notebooks.find((item) => item.id === filterId) ?? null : null;
+  const currentTag = view === "tag" ? tags.find((item) => item.id === filterId) ?? null : null;
+  const noteState: NoteState = view === "archive" ? "archived" : view === "trash" ? "trashed" : "normal";
+  const managementView = view === "notebooks" || view === "tags";
+
+  const paneTitle =
+    view === "notebook"
+      ? currentNotebook?.name ?? "Notebook"
+      : view === "tag"
+        ? currentTag?.name ?? "Tag"
+        : view === "archive"
+          ? "Archive"
+          : view === "trash"
+            ? "Trash"
+            : view === "notebooks"
+              ? "Notebooks"
+              : view === "tags"
+                ? "Tags"
+                : "Quick Notes";
+
+  const paneEyebrow =
+    view === "notebook"
+      ? "Notebook"
+      : view === "tag"
+        ? "Tag"
+        : view === "archive" || view === "trash"
+          ? "Library"
+          : view === "notebooks" || view === "tags"
+            ? "Organize"
+            : "Home";
+
+  function resetEditor() {
+    setSelectedId(null);
+    setTitle("");
+    setBody("");
+    setEditorNotebookId(null);
+    setActiveNoteTags([]);
+    setSaveState("Saved");
+  }
+
+  async function openNote(note: Note | null) {
     if (note === null) {
-      setSelectedId(null);
-      setTitle("");
-      setBody("");
-      setSaveState("Saved");
+      resetEditor();
       return;
     }
 
     setSelectedId(note.id);
     setTitle(note.title);
     setBody(documentToText(note.document));
+    setEditorNotebookId(note.notebook_id);
     setSaveState("Saved");
     setError("");
+
+    try {
+      const assigned = await listNoteTags(note.id);
+      setActiveNoteTags(assigned);
+    } catch (caught) {
+      setActiveNoteTags([]);
+      setError(messageFromError(caught));
+    }
   }
 
   async function hydrateWorkspace(authenticatedUser: CurrentUser) {
-    const loadedNotes = await listNotes();
+    const [loadedNotes, loadedNotebooks, loadedTags] = await Promise.all([
+      listNotes(),
+      listNotebooks(),
+      listTags(),
+    ]);
     setUser(authenticatedUser);
     setNotes(loadedNotes);
+    setNotebooks(loadedNotebooks);
+    setTags(loadedTags);
     setAuthState("authenticated");
-    openNote(loadedNotes[0] ?? null);
+    await openNote(loadedNotes[0] ?? null);
   }
 
   useEffect(() => {
@@ -181,18 +248,29 @@ function App() {
     async function bootstrap() {
       try {
         const currentUser = await getCurrentUser();
-        const loadedNotes = await listNotes();
+        const [loadedNotes, loadedNotebooks, loadedTags] = await Promise.all([
+          listNotes(),
+          listNotebooks(),
+          listTags(),
+        ]);
         if (cancelled) {
           return;
         }
 
         setUser(currentUser);
         setNotes(loadedNotes);
+        setNotebooks(loadedNotebooks);
+        setTags(loadedTags);
         setAuthState("authenticated");
         if (loadedNotes[0]) {
           setSelectedId(loadedNotes[0].id);
           setTitle(loadedNotes[0].title);
           setBody(documentToText(loadedNotes[0].document));
+          setEditorNotebookId(loadedNotes[0].notebook_id);
+          const assigned = await listNoteTags(loadedNotes[0].id);
+          if (!cancelled) {
+            setActiveNoteTags(assigned);
+          }
         }
       } catch (caught) {
         if (cancelled) {
@@ -213,13 +291,56 @@ function App() {
     };
   }, []);
 
+  async function changeView(nextView: WorkspaceView, nextFilterId: string | null = null) {
+    setView(nextView);
+    setFilterId(nextFilterId);
+    setSearch("");
+    setError("");
+
+    if (nextView === "notebooks" || nextView === "tags") {
+      resetEditor();
+      return;
+    }
+
+    setBusy(true);
+    try {
+      const state: NoteState = nextView === "archive" ? "archived" : nextView === "trash" ? "trashed" : "normal";
+      const loaded = await listNotes({
+        state,
+        notebookId: nextView === "notebook" ? nextFilterId : null,
+        tagId: nextView === "tag" ? nextFilterId : null,
+      });
+      setNotes(loaded);
+      await openNote(loaded[0] ?? null);
+    } catch (caught) {
+      setError(messageFromError(caught));
+      setNotes([]);
+      resetEditor();
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function handleCreateNote() {
     setBusy(true);
     setError("");
     try {
-      const note = await createNote();
-      setNotes((current) => [note, ...current]);
-      openNote(note);
+      const notebookId = view === "notebook" ? filterId : null;
+      const note = await createNote(notebookId);
+      if (view === "tag" && filterId) {
+        await assignNoteTag(note.id, filterId);
+      }
+
+      if (view === "archive" || view === "trash" || managementView) {
+        setView("home");
+        setFilterId(null);
+        const loaded = await listNotes();
+        setNotes(loaded);
+        await openNote(loaded.find((item) => item.id === note.id) ?? note);
+      } else {
+        setNotes((current) => [note, ...current]);
+        await openNote(note);
+      }
     } catch (caught) {
       setError(messageFromError(caught));
     } finally {
@@ -239,10 +360,12 @@ function App() {
       const updated = await updateNote(selectedNote.id, {
         title,
         document: textToDocument(body),
+        notebook_id: editorNotebookId,
       });
       setNotes((current) => current.map((note) => (note.id === updated.id ? updated : note)));
       setTitle(updated.title);
       setBody(documentToText(updated.document));
+      setEditorNotebookId(updated.notebook_id);
       setSaveState("Saved");
     } catch (caught) {
       setSaveState("Not saved");
@@ -263,7 +386,144 @@ function App() {
       await trashNote(selectedNote.id);
       const remaining = notes.filter((note) => note.id !== selectedNote.id);
       setNotes(remaining);
-      openNote(remaining[0] ?? null);
+      await openNote(remaining[0] ?? null);
+    } catch (caught) {
+      setError(messageFromError(caught));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleStateChange(state: NoteState) {
+    if (!selectedNote) {
+      return;
+    }
+
+    setBusy(true);
+    setError("");
+    try {
+      await updateNote(selectedNote.id, { state });
+      const remaining = notes.filter((note) => note.id !== selectedNote.id);
+      setNotes(remaining);
+      await openNote(remaining[0] ?? null);
+    } catch (caught) {
+      setError(messageFromError(caught));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handlePinToggle() {
+    if (!selectedNote) {
+      return;
+    }
+
+    setBusy(true);
+    setError("");
+    try {
+      const updated = await updateNote(selectedNote.id, { is_pinned: !selectedNote.is_pinned });
+      setNotes((current) =>
+        current
+          .map((note) => (note.id === updated.id ? updated : note))
+          .sort((left, right) => Number(right.is_pinned) - Number(left.is_pinned)),
+      );
+    } catch (caught) {
+      setError(messageFromError(caught));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleTagToggle(tag: Tag) {
+    if (!selectedNote) {
+      return;
+    }
+
+    setBusy(true);
+    setError("");
+    const assigned = activeNoteTags.some((item) => item.id === tag.id);
+    try {
+      if (assigned) {
+        await removeNoteTag(selectedNote.id, tag.id);
+        setActiveNoteTags((current) => current.filter((item) => item.id !== tag.id));
+      } else {
+        await assignNoteTag(selectedNote.id, tag.id);
+        setActiveNoteTags((current) => [...current, tag].sort((a, b) => a.name.localeCompare(b.name)));
+      }
+    } catch (caught) {
+      setError(messageFromError(caught));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleCreateNotebook(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const name = newNotebookName.trim();
+    if (!name) {
+      return;
+    }
+
+    setBusy(true);
+    setError("");
+    try {
+      const notebook = await createNotebook(name, newNotebookParent || null);
+      setNotebooks((current) => [...current, notebook].sort((a, b) => a.name.localeCompare(b.name)));
+      setNewNotebookName("");
+      setNewNotebookParent("");
+    } catch (caught) {
+      setError(messageFromError(caught));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleDeleteNotebook(notebook: Notebook) {
+    setBusy(true);
+    setError("");
+    try {
+      await deleteNotebook(notebook.id);
+      setNotebooks((current) => current.filter((item) => item.id !== notebook.id));
+      if (filterId === notebook.id) {
+        await changeView("home");
+      }
+    } catch (caught) {
+      setError(messageFromError(caught));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleCreateTag(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const name = newTagName.trim();
+    if (!name) {
+      return;
+    }
+
+    setBusy(true);
+    setError("");
+    try {
+      const tag = await createTag(name);
+      setTags((current) => [...current, tag].sort((a, b) => a.name.localeCompare(b.name)));
+      setNewTagName("");
+    } catch (caught) {
+      setError(messageFromError(caught));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleDeleteTag(tag: Tag) {
+    setBusy(true);
+    setError("");
+    try {
+      await deleteTag(tag.id);
+      setTags((current) => current.filter((item) => item.id !== tag.id));
+      setActiveNoteTags((current) => current.filter((item) => item.id !== tag.id));
+      if (filterId === tag.id) {
+        await changeView("home");
+      }
     } catch (caught) {
       setError(messageFromError(caught));
     } finally {
@@ -278,7 +538,9 @@ function App() {
       await logoutRequest();
       setUser(null);
       setNotes([]);
-      openNote(null);
+      setNotebooks([]);
+      setTags([]);
+      resetEditor();
       setAuthState("unauthenticated");
     } catch (caught) {
       setError(messageFromError(caught));
@@ -316,16 +578,47 @@ function App() {
         </button>
 
         <nav>
-          {navigation.map((item, index) => (
+          <button className={`nav-item${view === "home" ? " active" : ""}`} type="button" onClick={() => void changeView("home")}>
+            Home
+          </button>
+          <button className={`nav-item${view === "notebooks" || view === "notebook" ? " active" : ""}`} type="button" onClick={() => void changeView("notebooks")}>
+            Notebooks
+          </button>
+          <button className={`nav-item${view === "tags" || view === "tag" ? " active" : ""}`} type="button" onClick={() => void changeView("tags")}>
+            Tags
+          </button>
+          <button className={`nav-item${view === "archive" ? " active" : ""}`} type="button" onClick={() => void changeView("archive")}>
+            Archive
+          </button>
+          <button className={`nav-item${view === "trash" ? " active" : ""}`} type="button" onClick={() => void changeView("trash")}>
+            Trash
+          </button>
+        </nav>
+
+        <div className="sidebar-library">
+          {notebooks.slice(0, 5).map((notebook) => (
             <button
-              className={`nav-item${index === 0 ? " active" : ""}`}
+              className={`sidebar-library-item${view === "notebook" && filterId === notebook.id ? " active" : ""}`}
               type="button"
-              key={item}
+              key={notebook.id}
+              onClick={() => void changeView("notebook", notebook.id)}
             >
-              {item}
+              <span aria-hidden="true">▱</span>
+              <span>{notebook.name}</span>
             </button>
           ))}
-        </nav>
+          {tags.slice(0, 5).map((tag) => (
+            <button
+              className={`sidebar-library-item${view === "tag" && filterId === tag.id ? " active" : ""}`}
+              type="button"
+              key={tag.id}
+              onClick={() => void changeView("tag", tag.id)}
+            >
+              <span aria-hidden="true">#</span>
+              <span>{tag.name}</span>
+            </button>
+          ))}
+        </div>
 
         <div className="sidebar-footer account-footer">
           <div>
@@ -336,56 +629,133 @@ function App() {
         </div>
       </aside>
 
-      <section className="note-list-pane" aria-label="Notes">
+      <section className="note-list-pane" aria-label={managementView ? paneTitle : "Notes"}>
         <header className="pane-header">
           <div>
-            <p className="eyebrow">Home</p>
-            <h1>Quick Notes</h1>
+            <p className="eyebrow">{paneEyebrow}</p>
+            <h1>{paneTitle}</h1>
           </div>
-          <span className="note-count">{notes.length}</span>
+          {!managementView ? <span className="note-count">{notes.length}</span> : null}
         </header>
-
-        <label className="search-box">
-          <span aria-hidden="true">⌕</span>
-          <input
-            type="search"
-            placeholder="Search loaded notes"
-            aria-label="Search notes"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-          />
-        </label>
-
-        <button className="quick-capture" type="button" onClick={handleCreateNote} disabled={busy}>
-          <span>Take a note…</span>
-          <span className="quick-actions" aria-hidden="true">＋</span>
-        </button>
 
         {error ? <p className="workspace-error" role="alert">{error}</p> : null}
 
-        <div className="notes-stack">
-          {visibleNotes.map((note) => {
-            const preview = documentToText(note.document) || "Empty note";
-            return (
-              <button
-                className={`note-card${note.id === selectedId ? " selected" : ""}`}
-                type="button"
-                key={note.id}
-                onClick={() => openNote(note)}
+        {view === "notebooks" ? (
+          <div className="manager-stack">
+            <form className="manager-create" onSubmit={handleCreateNotebook}>
+              <input
+                aria-label="New notebook name"
+                placeholder="New notebook"
+                value={newNotebookName}
+                onChange={(event) => setNewNotebookName(event.target.value)}
+                required
+              />
+              <select
+                aria-label="Parent notebook"
+                value={newNotebookParent}
+                onChange={(event) => setNewNotebookParent(event.target.value)}
               >
-                <h2>{note.title || "Untitled"}</h2>
-                <p>{preview}</p>
-                <small>{new Date(note.updated_at).toLocaleString()}</small>
-              </button>
-            );
-          })}
-          {visibleNotes.length === 0 ? (
-            <div className="empty-list">
-              <strong>{notes.length === 0 ? "No notes yet" : "No matching notes"}</strong>
-              <span>{notes.length === 0 ? "Create your first private note." : "Try another search."}</span>
+                <option value="">No parent</option>
+                {notebooks.map((notebook) => (
+                  <option value={notebook.id} key={notebook.id}>{notebook.name}</option>
+                ))}
+              </select>
+              <button className="primary-button" type="submit" disabled={busy}>Create notebook</button>
+            </form>
+
+            <div className="manager-list">
+              {notebooks.map((notebook) => (
+                <article className="manager-row" key={notebook.id}>
+                  <div>
+                    <strong>{notebook.name}</strong>
+                    <span>{notebook.parent_id ? "Nested notebook" : "Top-level notebook"}</span>
+                  </div>
+                  <div className="manager-actions">
+                    <button type="button" onClick={() => void changeView("notebook", notebook.id)}>Open</button>
+                    <button type="button" onClick={() => void handleDeleteNotebook(notebook)} disabled={busy}>Delete</button>
+                  </div>
+                </article>
+              ))}
+              {notebooks.length === 0 ? <div className="empty-list"><strong>No notebooks yet</strong><span>Create a notebook to organize related notes.</span></div> : null}
             </div>
-          ) : null}
-        </div>
+          </div>
+        ) : view === "tags" ? (
+          <div className="manager-stack">
+            <form className="manager-create" onSubmit={handleCreateTag}>
+              <input
+                aria-label="New tag name"
+                placeholder="New tag"
+                value={newTagName}
+                onChange={(event) => setNewTagName(event.target.value)}
+                required
+              />
+              <button className="primary-button" type="submit" disabled={busy}>Create tag</button>
+            </form>
+
+            <div className="manager-list">
+              {tags.map((tag) => (
+                <article className="manager-row" key={tag.id}>
+                  <div>
+                    <strong>#{tag.name}</strong>
+                    <span>Private organizational tag</span>
+                  </div>
+                  <div className="manager-actions">
+                    <button type="button" onClick={() => void changeView("tag", tag.id)}>Open</button>
+                    <button type="button" onClick={() => void handleDeleteTag(tag)} disabled={busy}>Delete</button>
+                  </div>
+                </article>
+              ))}
+              {tags.length === 0 ? <div className="empty-list"><strong>No tags yet</strong><span>Create tags for flexible organization across notebooks.</span></div> : null}
+            </div>
+          </div>
+        ) : (
+          <>
+            <label className="search-box">
+              <span aria-hidden="true">⌕</span>
+              <input
+                type="search"
+                placeholder="Search loaded notes"
+                aria-label="Search notes"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+              />
+            </label>
+
+            {noteState === "normal" ? (
+              <button className="quick-capture" type="button" onClick={handleCreateNote} disabled={busy}>
+                <span>Take a note…</span>
+                <span className="quick-actions" aria-hidden="true">＋</span>
+              </button>
+            ) : null}
+
+            <div className="notes-stack">
+              {visibleNotes.map((note) => {
+                const preview = documentToText(note.document) || "Empty note";
+                return (
+                  <button
+                    className={`note-card${note.id === selectedId ? " selected" : ""}`}
+                    type="button"
+                    key={note.id}
+                    onClick={() => void openNote(note)}
+                  >
+                    <div className="note-card-heading">
+                      <h2>{note.title || "Untitled"}</h2>
+                      {note.is_pinned ? <span title="Pinned" aria-label="Pinned">●</span> : null}
+                    </div>
+                    <p>{preview}</p>
+                    <small>{new Date(note.updated_at).toLocaleString()}</small>
+                  </button>
+                );
+              })}
+              {visibleNotes.length === 0 ? (
+                <div className="empty-list">
+                  <strong>{notes.length === 0 ? `No ${paneTitle.toLowerCase()} notes` : "No matching notes"}</strong>
+                  <span>{notes.length === 0 ? "Nothing is stored in this view yet." : "Try another search."}</span>
+                </div>
+              ) : null}
+            </div>
+          </>
+        )}
 
         <footer className="mobile-source-footer">
           <span>AGPL-3.0-only</span>
@@ -395,13 +765,33 @@ function App() {
       </section>
 
       <section className="editor-pane" aria-label="Note editor">
-        {selectedNote ? (
+        {managementView ? (
+          <div className="empty-editor organization-editor">
+            <p className="eyebrow">Organization</p>
+            <h2>{view === "notebooks" ? "Structure your knowledge." : "Connect ideas across notebooks."}</h2>
+            <p>
+              {view === "notebooks"
+                ? "Notebooks provide hierarchy. Deleting a notebook preserves its notes and returns them to the unfiled library."
+                : "Tags provide flexible cross-notebook organization and can be assigned directly from the note editor."}
+            </p>
+          </div>
+        ) : selectedNote ? (
           <>
             <header className="editor-toolbar">
-              <div className="crumbs">Home / Quick Notes</div>
+              <div className="crumbs">{paneTitle} / {selectedNote.title || "Untitled"}</div>
               <div className="toolbar-actions editor-actions">
                 <span className={`save-state${dirty ? " dirty" : ""}`}>{dirty ? "Unsaved changes" : saveState}</span>
-                <button type="button" onClick={handleTrash} disabled={busy}>Trash</button>
+                {noteState === "normal" ? (
+                  <>
+                    <button type="button" onClick={() => void handlePinToggle()} disabled={busy}>
+                      {selectedNote.is_pinned ? "Unpin" : "Pin"}
+                    </button>
+                    <button type="button" onClick={() => void handleStateChange("archived")} disabled={busy}>Archive</button>
+                    <button type="button" onClick={handleTrash} disabled={busy}>Trash</button>
+                  </>
+                ) : (
+                  <button type="button" onClick={() => void handleStateChange("normal")} disabled={busy}>Restore</button>
+                )}
                 <button className="save-button" type="button" onClick={handleSave} disabled={busy || !dirty}>
                   Save
                 </button>
@@ -417,6 +807,43 @@ function App() {
                 value={title}
                 onChange={(event) => setTitle(event.target.value)}
               />
+
+              <div className="note-metadata-controls">
+                <label>
+                  <span>Notebook</span>
+                  <select
+                    value={editorNotebookId ?? ""}
+                    onChange={(event) => setEditorNotebookId(event.target.value || null)}
+                  >
+                    <option value="">Unfiled</option>
+                    {notebooks.map((notebook) => (
+                      <option value={notebook.id} key={notebook.id}>{notebook.name}</option>
+                    ))}
+                  </select>
+                </label>
+                <div className="tag-assignment" aria-label="Note tags">
+                  <span>Tags</span>
+                  <div className="tag-chip-list">
+                    {tags.map((tag) => {
+                      const assigned = activeNoteTags.some((item) => item.id === tag.id);
+                      return (
+                        <button
+                          className={`tag-chip${assigned ? " assigned" : ""}`}
+                          type="button"
+                          aria-pressed={assigned}
+                          key={tag.id}
+                          onClick={() => void handleTagToggle(tag)}
+                          disabled={busy}
+                        >
+                          #{tag.name}
+                        </button>
+                      );
+                    })}
+                    {tags.length === 0 ? <span className="no-tags">No tags created</span> : null}
+                  </div>
+                </div>
+              </div>
+
               <p className="editor-meta">
                 Structured GoreeCloud document · manual save during Milestone 0
               </p>
@@ -428,9 +855,9 @@ function App() {
                 onChange={(event) => setBody(event.target.value)}
               />
               <div className="callout foundation-callout">
-                <strong>Native persistence is active</strong>
+                <strong>Native organization is active</strong>
                 <span>
-                  This bridge stores the note through the user-isolated PostgreSQL API. Rich-text editing and autosave remain later gates.
+                  Notebooks, tags, pinning, Archive, revisions, and recoverable Trash now use the user-isolated PostgreSQL API. Rich-text editing and autosave remain later gates.
                 </span>
               </div>
             </article>
@@ -438,11 +865,13 @@ function App() {
         ) : (
           <div className="empty-editor">
             <p className="eyebrow">GoreeCloud Notes</p>
-            <h2>Your private workspace is ready.</h2>
-            <p>Create a note to begin building your knowledge library.</p>
-            <button className="primary-button" type="button" onClick={handleCreateNote} disabled={busy}>
-              Create first note
-            </button>
+            <h2>{noteState === "normal" ? "Your private workspace is ready." : `No note selected in ${paneTitle}.`}</h2>
+            <p>{noteState === "normal" ? "Create a note to begin building your knowledge library." : "Choose a note from the list or return to Home."}</p>
+            {noteState === "normal" ? (
+              <button className="primary-button" type="button" onClick={handleCreateNote} disabled={busy}>
+                Create first note
+              </button>
+            ) : null}
           </div>
         )}
 
