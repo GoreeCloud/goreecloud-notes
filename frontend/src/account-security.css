@@ -173,6 +173,34 @@
   margin-top: 0.35rem;
 }
 
+.account-security-portability {
+  display: grid;
+  gap: 1rem;
+  margin-top: 1.65rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid rgba(126, 145, 169, 0.17);
+}
+
+.portability-guidance {
+  margin-top: 0;
+}
+
+.portability-actions {
+  margin-top: 0;
+}
+
+.account-security-export-success {
+  margin: 0;
+  padding: 0.8rem 0.9rem;
+  border: 1px solid rgba(47, 164, 111, 0.22);
+  border-radius: 14px;
+  color: #237851;
+  background: rgba(232, 250, 242, 0.72);
+  font-size: 0.82rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
 .account-security-status {
   display: grid;
   gap: 0.55rem;
@@ -266,6 +294,10 @@
     box-shadow: none;
   }
 
+  .account-security-portability {
+    border-top-color: rgba(206, 220, 240, 0.1);
+  }
+
   .account-security-launcher,
   .secondary-button,
   .account-security-form label,
@@ -282,6 +314,12 @@
   .account-security-identity span,
   .field-guidance {
     color: #8f9db1;
+  }
+
+  .account-security-export-success {
+    border-color: rgba(83, 200, 144, 0.22);
+    color: #8bd8b4;
+    background: rgba(31, 90, 67, 0.28);
   }
 
   .account-security-error,
