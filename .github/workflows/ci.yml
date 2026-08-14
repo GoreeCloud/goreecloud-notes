@@ -127,6 +127,9 @@ jobs:
       - name: Validate organization, ownership, revisions, and note lifecycle
         run: bash scripts/ci_validate_workspace.sh
 
+      - name: Validate private attachment storage and authorization
+        run: bash scripts/ci_validate_attachments.sh
+
       - name: Capture Compose diagnostics
         if: always()
         run: |
