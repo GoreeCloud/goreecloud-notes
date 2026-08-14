@@ -136,6 +136,10 @@ class NoteRevisionView(BaseModel):
     change_summary: str | None
 
 
+class RevisionRestoreRequest(BaseModel):
+    expected_content_version: int = Field(ge=1)
+
+
 def _owned_notebook(db: Session, *, owner_id: UUID, notebook_id: UUID) -> Notebook | None:
     return db.scalar(
         select(Notebook).where(
@@ -182,6 +186,25 @@ def _require_owned_note(db: Session, *, owner_id: UUID, note_id: UUID) -> Note:
     if note is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="note not found")
     return note
+
+
+def _require_owned_revision(
+    db: Session,
+    *,
+    owner_id: UUID,
+    note_id: UUID,
+    revision_id: UUID,
+) -> NoteRevision:
+    revision = db.scalar(
+        select(NoteRevision).where(
+            NoteRevision.id == revision_id,
+            NoteRevision.note_id == note_id,
+            NoteRevision.owner_id == owner_id,
+        )
+    )
+    if revision is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="revision not found")
+    return revision
 
 
 def _validate_notebook_owner(
@@ -247,7 +270,12 @@ def _should_snapshot(db: Session, *, note: Note) -> bool:
     return latest.created_at <= cutoff
 
 
-def _create_revision(db: Session, *, note: Note) -> None:
+def _create_revision(
+    db: Session,
+    *,
+    note: Note,
+    change_summary: str | None = None,
+) -> None:
     latest_number = db.scalar(
         select(func.max(NoteRevision.revision_number)).where(NoteRevision.note_id == note.id)
     )
@@ -260,6 +288,7 @@ def _create_revision(db: Session, *, note: Note) -> None:
             title=note.title,
             document=note.document,
             document_schema=note.document_schema,
+            change_summary=change_summary,
         )
     )
 
@@ -542,6 +571,61 @@ def list_note_revisions(
             .order_by(NoteRevision.revision_number.desc())
         )
     )
+
+
+@router.post(
+    "/notes/{note_id}/revisions/{revision_id}/restore",
+    response_model=NoteView,
+)
+def restore_note_revision(
+    note_id: UUID,
+    revision_id: UUID,
+    payload: RevisionRestoreRequest,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_csrf),
+) -> Note:
+    """Restore historical note content without rewriting immutable history.
+
+    A restore is a new content write. The caller must provide the content version
+    it read, stale restores fail with 409, and the current content is always
+    snapshotted before a historical revision replaces it. Metadata such as
+    notebook, tags, state, pinning, and color is intentionally not changed.
+    """
+
+    note = _require_owned_note(db, owner_id=context.user.id, note_id=note_id)
+    revision = _require_owned_revision(
+        db,
+        owner_id=context.user.id,
+        note_id=note.id,
+        revision_id=revision_id,
+    )
+
+    if payload.expected_content_version != note.content_version:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="note changed in another session; reload before restoring",
+        )
+
+    if (
+        revision.title == note.title
+        and revision.document == note.document
+        and revision.document_schema == note.document_schema
+    ):
+        return note
+
+    _create_revision(
+        db,
+        note=note,
+        change_summary=f"Pre-restore snapshot before restoring revision {revision.revision_number}",
+    )
+    note.title = revision.title
+    note.document = revision.document
+    note.document_schema = revision.document_schema
+    note.content_version += 1
+
+    db.commit()
+    db.refresh(note)
+    return note
 
 
 @router.patch("/notes/{note_id}", response_model=NoteView)
