@@ -1,6 +1,6 @@
 # Production Runtime Readiness Boundary
 
-GoreeCloud Notes is not approved for production by source configuration alone. This document defines the source-level production runtime preflight added during Milestone 0 and separates that preflight from target-environment publication, monitoring, backup, migration, and administrator acceptance.
+GoreeCloud Notes is not approved for production by source configuration alone. This document defines the source-level production runtime preflight and administrative suspension boundary added during Milestone 0 and separates those source controls from target-environment publication, monitoring, backup, migration, operator authorization, and final administrator acceptance.
 
 ## Purpose
 
@@ -11,7 +11,7 @@ The production runtime boundary therefore has two layers:
 1. `Settings` rejects known unsafe production configuration before the application starts.
 2. `python -m app.production_check` verifies non-secret target filesystem prerequisites without connecting to PostgreSQL or mutating application data.
 
-Neither layer grants production approval.
+A separate account-lifecycle boundary allows an authorized local operator to suspend or reinstate an account without deleting its data. None of these source-level controls grants production approval.
 
 ## Production Configuration Requirements
 
@@ -76,6 +76,37 @@ The development Dockerfile and Compose service health checks now use `/ready` ra
 
 Process-level monitoring may still query `/health` separately so operators can distinguish an API-process failure from a dependency-readiness failure.
 
+## Administrative Suspension Boundary
+
+The private account model already separates the account identity from its credential and session records. The source-level lifecycle commands use that separation to provide reversible suspension instead of destructive account deletion.
+
+Operators can review non-sensitive account state with:
+
+```bash
+python -m app.cli account-status --username <username>
+python -m app.cli account-status --username <username> --json
+```
+
+Suspension requires explicit acknowledgement:
+
+```bash
+python -m app.cli disable-user \
+  --username <username> \
+  --confirm-disable
+```
+
+A confirmed disable changes only the account's active state and revokes every stored browser session in the same transaction. Credentials and user-owned Notes data remain preserved. Existing browser cookies stop authenticating after the transaction commits, and subsequent login attempts receive the same generic invalid-credential response as other authentication failures.
+
+Reinstatement is explicit:
+
+```bash
+python -m app.cli enable-user --username <username>
+```
+
+Re-enabling preserves the existing password but also revokes any stored sessions. This prevents a still-unexpired cookie issued before suspension from becoming valid again after reinstatement. A fresh login is required.
+
+This is a source capability, not an authorization policy. Production still needs a documented answer for who may execute these commands, through which privileged host/account, how the action is audited, and how suspension/reinstatement is approved. Permanent account deletion and retention-driven destruction remain outside this boundary.
+
 ## CI Evidence
 
 `.github/workflows/production-readiness.yml` provides a dedicated **Production Runtime Preflight** source gate. It uses only synthetic temporary paths and a synthetic secret. The workflow:
@@ -86,11 +117,13 @@ Process-level monitoring may still query `/health` separately so operators can d
 4. requires every static check to pass while `productionApprovalGranted` remains false;
 5. reruns the command with unsafe production defaults and requires a non-zero result plus machine-readable failure evidence.
 
-The main Continuous Integration workflow separately exercises `/ready` against the disposable Compose/PostgreSQL/attachment-volume stack. This validates live dependency readiness without converting CI into production-environment evidence.
+The main Continuous Integration workflow separately exercises `/ready` against the disposable Compose/PostgreSQL/attachment-volume stack and validates the administrative account lifecycle against a disposable account. The authentication gate proves that disable requires confirmation, revokes the active session, blocks login without disclosing account state, preserves the credential for later reinstatement, prevents stale-cookie resurrection, and permits a fresh login after re-enable.
+
+These checks validate source behavior without converting CI into production-environment or operator-authorization evidence.
 
 ## Production Gates Still Open
 
-This boundary closes only the source-level unsafe-default and basic runtime-readiness gap. Production still requires separate evidence for:
+The implemented source boundary closes the unsafe-default/basic runtime-readiness gap and provides reversible administrative account suspension. Production still requires separate evidence for:
 
 - final Family Services VM placement and persistent storage paths;
 - final Caddy route and exact trusted-proxy CIDRs;
@@ -101,8 +134,8 @@ This boundary closes only the source-level unsafe-default and basic runtime-read
 - selected RPO and measured RTO;
 - isolated production-representative restore;
 - protected-copy Memos attachment extraction and production-representative migration rehearsal;
-- target administrator/account lifecycle procedures;
+- final operator authorization, auditing, and runbooks for account creation, recovery, suspension, and reinstatement;
 - production image/release policy and rollback validation;
 - final administrator acceptance.
 
-The transitional `GoreeCloud/memos` service and `notes.goreecloud.com` publication remain protected and unchanged until those gates are validated together. A green Production Runtime Preflight must not be used as justification to retire Memos, migrate production data, change DNS/Caddy/NetBird, or enable permanent deletion.
+The transitional `GoreeCloud/memos` service and `notes.goreecloud.com` publication remain protected and unchanged until those gates are validated together. A green Production Runtime Preflight or lifecycle test must not be used as justification to retire Memos, migrate production data, change DNS/Caddy/NetBird, or enable permanent deletion.
