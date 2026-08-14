@@ -26,6 +26,14 @@ const sampleNotes = [
   },
 ];
 
+function SourceLink() {
+  return (
+    <a className="source-link" href="https://github.com/GoreeCloud/goreecloud-notes">
+      Source code
+    </a>
+  );
+}
+
 function App() {
   return (
     <main className="app-shell">
@@ -86,6 +94,12 @@ function App() {
             </article>
           ))}
         </div>
+
+        <footer className="mobile-source-footer">
+          <span>AGPL-3.0-only</span>
+          <span aria-hidden="true"> · </span>
+          <SourceLink />
+        </footer>
       </section>
 
       <section className="editor-pane" aria-label="Note editor">
@@ -122,7 +136,7 @@ function App() {
         <footer className="source-footer">
           <span>AGPL-3.0-only</span>
           <span aria-hidden="true"> · </span>
-          <a href="https://github.com/GoreeCloud/goreecloud-notes">Source code</a>
+          <SourceLink />
         </footer>
       </section>
     </main>
