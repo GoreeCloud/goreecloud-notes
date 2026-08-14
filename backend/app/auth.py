@@ -175,13 +175,15 @@ def list_active_user_sessions(db: Session, context: AuthContext) -> list[AuthSes
 
 
 def revoke_other_user_sessions(db: Session, context: AuthContext) -> int:
-    """Revoke every live session for the account except the authenticated one."""
+    """Revoke every other active session for the account except the authenticated one."""
 
+    now = datetime.now(UTC)
     other_sessions = list(
         db.scalars(
             select(AuthSession).where(
                 AuthSession.user_id == context.user.id,
                 AuthSession.id != context.session.id,
+                AuthSession.expires_at > now,
             )
         )
     )
