@@ -51,8 +51,12 @@ Create local configuration and a file-backed PostgreSQL password:
 cp .env.example .env
 mkdir -p secrets
 python -c 'import secrets; print(secrets.token_urlsafe(48))' > secrets/postgres_password
-chmod 600 .env secrets/postgres_password
+sudo chgrp 20001 secrets/postgres_password
+chmod 600 .env
+chmod 640 secrets/postgres_password
 ```
+
+The numeric group must match `APP_SECRET_GID` in `.env`. Docker Compose grants that supplementary group to the non-root API process so the process can read the secret without making the file world-readable or running the application as root.
 
 Validate and start PostgreSQL/API:
 
