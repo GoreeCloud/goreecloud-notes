@@ -58,6 +58,17 @@ export type Note = {
   updated_at: string;
 };
 
+export type NoteRevision = {
+  id: string;
+  revision_number: number;
+  content_version: number;
+  title: string;
+  document: NoteDocument;
+  document_schema: number;
+  created_at: string;
+  change_summary: string | null;
+};
+
 export type NoteListOptions = {
   state?: NoteState;
   notebookId?: string | null;
@@ -138,6 +149,10 @@ async function apiFetch<T>(
 
 function normalizeNote(note: Note): Note {
   return { ...note, document: sanitizeDocument(note.document) };
+}
+
+function normalizeRevision(revision: NoteRevision): NoteRevision {
+  return { ...revision, document: sanitizeDocument(revision.document) };
 }
 
 export function documentToText(document: NoteDocument): string {
@@ -281,6 +296,29 @@ export async function updateNote(noteId: string, payload: NotePatch): Promise<No
     await apiFetch<Note>(
       `/notes/${encodeURIComponent(noteId)}`,
       { method: "PATCH", body: JSON.stringify(payload) },
+      { csrf: true },
+    ),
+  );
+}
+
+export async function listNoteRevisions(noteId: string): Promise<NoteRevision[]> {
+  return (await apiFetch<NoteRevision[]>(`/notes/${encodeURIComponent(noteId)}/revisions`)).map(
+    normalizeRevision,
+  );
+}
+
+export async function restoreNoteRevision(
+  noteId: string,
+  revisionId: string,
+  expectedContentVersion: number,
+): Promise<Note> {
+  return normalizeNote(
+    await apiFetch<Note>(
+      `/notes/${encodeURIComponent(noteId)}/revisions/${encodeURIComponent(revisionId)}/restore`,
+      {
+        method: "POST",
+        body: JSON.stringify({ expected_content_version: expectedContentVersion }),
+      },
       { csrf: true },
     ),
   );
