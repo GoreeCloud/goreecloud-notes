@@ -35,13 +35,15 @@ The current default session lifetime is 12 hours and is configurable through dep
 
 Authentication success never implies unrestricted access to another user's notes, notebooks, tags, attachments, exports, revisions, or search results.
 
-The first workspace endpoints scope database queries to the authenticated user's UUID. Cross-user note access and cross-user notebook assignment use not-found responses instead of revealing whether another user's object exists. Mutations require both a live authenticated session and CSRF validation.
+Workspace queries scope database access to the authenticated user's UUID. Cross-user note, notebook, and tag references use not-found responses instead of revealing whether another user's object exists. Notebook parent references, note notebook assignments, tag filters, note/tag assignments, and revision reads all re-check ownership server-side. Mutations require both a live authenticated session and CSRF validation.
 
-CI validates this boundary against a live PostgreSQL/Compose environment by creating two synthetic users and proving that the second user cannot read, overwrite, list, or attach new content to the first user's note/notebook identifiers.
+Notebook hierarchy validation also rejects self/descendant cycles. Tag uniqueness is user-local after Unicode/case/whitespace normalization, preventing visually duplicated organization entries from bypassing the intended namespace.
+
+CI validates these boundaries against a live PostgreSQL/Compose environment with two synthetic users. The current integration script proves the second user cannot read or overwrite the first user's note, cannot create content in the first user's notebook, cannot use the first user's tag as a note-list filter, and does not receive the first user's note in ordinary listings. The owner path separately validates tag assignment/removal, tag-filtered listings, notebook deletion without note loss, and tag deletion without note loss.
 
 ## Recoverable Note State
 
-The ordinary note delete endpoint moves a note into native `trashed` state instead of hard-deleting the row. Content/title edits preserve immutable pre-change revision snapshots. Permanent-delete and revision-retention policy remain future security/recovery gates.
+The ordinary note delete endpoint moves a note into native `trashed` state instead of hard-deleting the row. Archive/restore and pin state use explicit native fields. Content/title edits preserve immutable pre-change revision snapshots. Permanent-delete and revision-retention/coalescing policy remain future security/recovery gates.
 
 ## Current Limitations
 
@@ -52,7 +54,8 @@ The authentication and ownership foundation is still development-stage. Producti
 - production account bootstrap and administrative recovery;
 - session maintenance and revocation operations;
 - attachment byte storage and authorization;
-- complete tags/search/export authorization paths;
+- production-grade search and export authorization paths;
+- permanent-delete and revision-retention policy;
 - backup and isolated restoration;
 - Memos migration and rollback;
 - monitoring and alerting;
