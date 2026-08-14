@@ -6,7 +6,7 @@ GoreeCloud Notes is a privacy-first, self-hosted note-taking, knowledge-manageme
 
 **Milestone 0 — Native Foundation is in active development. Production deployment is not approved.**
 
-Draft PR #1 on `feature/native-foundation` contains the current native foundation. The application already has authenticated PostgreSQL-backed note persistence, owner isolation, nested notebook and tag organization, rich structured editing, conflict-safe explicit saves, immutable revision recovery, private attachments with safe raster previews and attachment-ID inline images, indexed PostgreSQL full-text search, note lifecycle controls, a verified full-library native export bundle, and a persistent Glaze UI. Those implemented capabilities remain development-stage until the remaining production, migration, backup/recovery, dependency, and security gates are closed.
+Draft PR #1 on `feature/native-foundation` contains the current native foundation. The application already has authenticated PostgreSQL-backed note persistence, owner isolation, nested notebook and tag organization, rich structured editing, conflict-safe explicit saves, immutable revision recovery, private attachments with safe raster previews and attachment-ID inline images, indexed PostgreSQL full-text search, note lifecycle controls, a verified full-library native export bundle, and a controlled disposable Memos-to-native persistence pipeline with preserved migration provenance. Those implemented capabilities remain development-stage until the remaining production, protected-source migration, backup/recovery, dependency, and security gates are closed.
 
 The native repository is independent from the transitional Memos-based GoreeCloud Notes implementation. `GoreeCloud/memos` remains preserved as a migration source, historical engineering record, and visual reference for the accepted Quick Notes experience until migration and replacement validation are complete.
 
@@ -91,7 +91,7 @@ Implemented foundation work includes:
 - Repository and branch governance with AGPL-3.0-only licensing.
 - React/TypeScript/Vite frontend with locked npm dependencies and Glaze UI.
 - FastAPI `/api/v1` backend and PostgreSQL persistence.
-- SQLAlchemy models and reviewed Alembic migration round trips.
+- SQLAlchemy models and reviewed Alembic migration round trips through migration-provenance revision `0006`.
 - Private administrative account creation, salted `scrypt` credentials, opaque database-backed sessions, and CSRF protection.
 - Explicit owner-scoped authorization and two-user isolation validation.
 - Nested notebooks, normalized tags, richer organization management, pinning, Archive/restore, and recoverable Trash.
@@ -102,10 +102,14 @@ Implemented foundation work includes:
 - Reference-aware attachment deletion protection so current or recoverable historical content does not lose required bytes.
 - Indexed PostgreSQL full-text search with scoped browser integration.
 - Verified native full-library ZIP export that preserves notebooks, notes, tags, relationships, revisions, attachment metadata, and attachment bytes while excluding credentials, sessions, login-rate state, search indexes, and internal storage paths.
-- Non-destructive transitional Memos migration inspection, manifest generation, and attachment-binary evidence verification.
-- Backend unit tests plus live Compose validation for authentication, workspace, organization, search, revisions, attachments, portability, and destructive disposable database-plus-attachment recovery.
+- Non-destructive transitional Memos export inspection, deterministic provider-neutral manifest generation, and attachment-binary evidence verification.
+- Explicit empty-target native Memos persistence import using only validated manifest/evidence inputs, generated native attachment storage, persistent source provenance, post-import read-only verification, duplicate-import refusal, and cross-user opacity.
+- Native portable export of imported accounts preserves exact migration import checkpoints and normalized source records so deferred source semantics remain portable instead of becoming database-only history.
+- Backend unit tests plus live Compose validation for authentication, workspace, organization, search, revisions, attachments, portability, migration, and destructive disposable database-plus-attachment recovery.
 
-Milestone 0 remains open for final Python dependency locking, broader production account/recovery UX, PDF/document/SVG preview policy, malware scanning, resumable/large-object and final production storage design, the native persistence importer and isolated migration-equivalence dry run, production Kopia/retention/off-site recovery evidence, and production-publication review.
+The current synthetic migration gate deliberately does not claim complete native semantic equivalence. Exact source Markdown, relations, location metadata, Trash restore targets, and named Memos colors remain preserved in migration provenance when the current native projection does not have an approved equivalent. External-link attachments remain unsupported by the native importer and therefore fail closed.
+
+Milestone 0 remains open for final Python dependency locking, broader production account/recovery UX, PDF/document/SVG preview policy, malware scanning, resumable/large-object and final production storage design, protected-copy Memos attachment extraction and a production-representative migration rehearsal, production Kopia/retention/off-site recovery evidence, selected RPO/RTO, and production-publication/monitoring review. Browser/scheduled/encrypted export UX and a native portable re-import path also remain open.
 
 See `docs/architecture.md`, `docs/attachments.md`, `docs/revisions.md`, `docs/migration.md`, `docs/portable-export.md`, and `docs/backup-restore.md` for the current technical boundaries.
 
