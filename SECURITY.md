@@ -23,6 +23,7 @@ Milestone 0 includes a private authentication foundation; this does not by itsel
 - Account identity and password credential material are stored in separate tables.
 - Passwords use salted, versioned `scrypt` hashes; plaintext passwords are never stored.
 - New and replacement passwords share one 12-to-1,024-character validation boundary across API and CLI mutations.
+- Known, inactive, and unknown-account login failures retain the password-hash work factor rather than exposing a deliberately cheap unknown-account branch.
 - Successful logins issue cryptographically random opaque session and CSRF secrets.
 - Only SHA-256 digests of those browser secrets are persisted in PostgreSQL.
 - The session secret is sent only in an HTTP-only cookie.
@@ -33,8 +34,13 @@ Milestone 0 includes a private authentication foundation; this does not by itsel
 - Authentication endpoints use `Cache-Control: no-store` for identity/session responses.
 - Authenticated password rotation requires CSRF plus the current password, rejects reuse of the current password, updates the stored credential, and revokes every browser session for the account.
 - Private administrative password recovery is available only through the server-side CLI and likewise revokes every browser session for the recovered account.
+- Login abuse controls protect both source+normalized-account and source-wide scopes with temporary bounded cooldowns; no permanent account lockout exists.
+- Blocked login responses use HTTP `429`, an integer `Retry-After`, and `Cache-Control: no-store`.
+- Successful login clears only the matching source+account bucket, preserving source-wide failure history against simple username rotation.
+- Persistent login-rate state stores opaque SHA-256-derived bucket keys plus counters/timestamps rather than clear username/IP columns. This is data minimization, not cryptographic anonymity for low-entropy source addresses.
+- `X-Forwarded-For` is ignored unless the direct peer belongs to an explicitly configured trusted-proxy CIDR. The trusted-proxy list defaults empty, malformed chains fall back to the direct peer, and invalid configured CIDRs fail validation.
 
-The current default session lifetime is 12 hours and is configurable through deployment configuration. Password rotation and recovery are documented in `docs/account-security.md`.
+The current default session lifetime is 12 hours and is configurable through deployment configuration. Password rotation, recovery, login-rate behavior, and proxy trust are documented in `docs/account-security.md`.
 
 ## Authorization and User Isolation
 
@@ -80,7 +86,7 @@ Permanent native-note deletion, individual revision deletion, final retention, a
 
 The authentication and ownership foundation is still development-stage. Production approval additionally requires review and validation of:
 
-- rate limiting / brute-force protections at the application and publication layers;
+- publication-layer rate limiting / abuse protections around the final private HTTPS path, including verified production proxy CIDRs and interactions with the application limiter;
 - production account lifecycle controls beyond local CLI recovery;
 - session maintenance, visibility, and revocation operations beyond credential-triggered global revocation;
 - final Python dependency-locking strategy;
@@ -89,7 +95,7 @@ The authentication and ownership foundation is still development-stage. Producti
 - resumable or large-object upload requirements;
 - export authorization and portable attachment packaging;
 - permanent-delete, revision-retention, and reference-aware garbage-collection policy;
-- backup and isolated restoration, including credential/session-state reconciliation;
+- backup and isolated restoration, including credential/session/rate-state reconciliation;
 - Memos migration and rollback;
 - monitoring and alerting;
 - private Caddy/NetBird publication;
@@ -97,4 +103,4 @@ The authentication and ownership foundation is still development-stage. Producti
 
 ## Production Gate
 
-Production publication is not approved until authentication, authorization, session storage, CSRF behavior, document compatibility, database protection, attachment storage, backup, restoration, migration, monitoring, and private-service publication have been reviewed and validated together.
+Production publication is not approved until authentication, authorization, session storage, CSRF behavior, login abuse controls, trusted-proxy topology, document compatibility, database protection, attachment storage, backup, restoration, migration, monitoring, and private-service publication have been reviewed and validated together.
