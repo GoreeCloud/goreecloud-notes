@@ -1,0 +1,131 @@
+.attachment-panel {
+  display: grid;
+  gap: 10px;
+  margin: 18px 0 8px;
+  padding: 14px;
+  border: 1px solid rgba(126, 145, 169, 0.16);
+  border-radius: 16px;
+  background: rgba(248, 250, 253, 0.58);
+}
+
+.attachment-heading,
+.attachment-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.attachment-heading > div,
+.attachment-row > div {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.attachment-heading span,
+.attachment-row a {
+  color: #39455a;
+  font-size: 0.84rem;
+  font-weight: 760;
+}
+
+.attachment-heading small,
+.attachment-row span,
+.attachment-empty {
+  color: #7a879a;
+  font-size: 0.72rem;
+}
+
+.attachment-list {
+  display: grid;
+  gap: 7px;
+}
+
+.attachment-row {
+  padding: 9px 10px;
+  border: 1px solid rgba(126, 145, 169, 0.12);
+  border-radius: 11px;
+  background: rgba(255, 255, 255, 0.62);
+}
+
+.attachment-row a {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+.attachment-row button,
+.attachment-upload {
+  flex: 0 0 auto;
+  padding: 6px 9px;
+  border: 0;
+  border-radius: 9px;
+  color: #5d6a7e;
+  background: rgba(231, 236, 244, 0.8);
+  cursor: pointer;
+  font-size: 0.72rem;
+  font-weight: 720;
+}
+
+.attachment-row button:hover:not(:disabled),
+.attachment-upload:hover {
+  color: #174fb8;
+  background: rgba(220, 232, 255, 0.9);
+}
+
+.attachment-upload input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.attachment-empty {
+  padding: 4px 1px;
+}
+
+@media (max-width: 520px) {
+  .attachment-heading,
+  .attachment-row {
+    align-items: flex-start;
+  }
+
+  .attachment-row span {
+    max-width: 190px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  .attachment-panel,
+  .attachment-row {
+    border-color: rgba(206, 220, 240, 0.1);
+  }
+
+  .attachment-panel {
+    background: rgba(28, 37, 50, 0.5);
+  }
+
+  .attachment-row {
+    background: rgba(39, 50, 67, 0.58);
+  }
+
+  .attachment-heading span,
+  .attachment-row a {
+    color: #dce4f0;
+  }
+
+  .attachment-row button,
+  .attachment-upload {
+    color: #aab6c8;
+    background: rgba(55, 70, 92, 0.7);
+  }
+}
