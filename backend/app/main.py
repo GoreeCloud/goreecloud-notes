@@ -22,6 +22,7 @@ from .auth import (
 )
 from .config import get_settings
 from .database import engine, get_db
+from .search import router as search_router
 from .workspace import router as workspace_router
 
 settings = get_settings()
@@ -156,5 +157,6 @@ def logout(
 
 
 api.include_router(workspace_router)
+api.include_router(search_router)
 api.include_router(attachments_router)
 app.include_router(api)
