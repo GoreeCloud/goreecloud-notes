@@ -10,6 +10,7 @@ from pathlib import Path
 
 from sqlalchemy import select
 
+from .attachment_audit import audit_user_attachment_store
 from .auth import hash_password, normalize_username, replace_user_password, validate_password
 from .config import get_settings
 from .database import SessionLocal
@@ -83,6 +84,45 @@ def reset_password(*, username: str, password_stdin: bool) -> None:
         db.commit()
 
     print(f"Reset GoreeCloud Notes password and revoked all sessions: {account_name}")
+
+
+def audit_attachments(*, username: str, json_output: bool) -> bool:
+    """Read and verify one account's attachment metadata and owner-scoped bytes."""
+
+    normalized = normalize_username(username)
+    if not normalized:
+        raise ValueError("Username must not be empty.")
+
+    settings = get_settings()
+    with SessionLocal() as db:
+        user = db.scalar(select(User).where(User.username_normalized == normalized))
+        if user is None:
+            raise ValueError("Account not found.")
+
+        result = audit_user_attachment_store(
+            db,
+            owner=user,
+            attachment_root=Path(settings.attachment_root),
+        )
+
+    if json_output:
+        print(json.dumps(result, ensure_ascii=False, sort_keys=True, separators=(",", ":")))
+        return bool(result["clean"])
+
+    summary = result["summary"]
+    status_label = "clean" if result["clean"] else "FAILED"
+    print(f"Attachment integrity audit: {status_label}")
+    print(f"Account: {result['account']['username']}")
+    print(f"Attachment records: {summary['attachmentRecords']}")
+    print(f"Verified attachments: {summary['verifiedAttachments']}")
+    print(f"Metadata bytes: {summary['metadataBytes']}")
+    print(f"Observed bytes: {summary['observedBytes']}")
+    print(f"Orphan files: {summary['orphanFiles']}")
+    print(f"Issues: {summary['issues']}")
+    for issue in result["issues"]:
+        location = issue["storageKey"] or issue["attachmentId"] or "owner store"
+        print(f"- {issue['code']} [{location}]: {issue['detail']}")
+    return bool(result["clean"])
 
 
 def export_library(*, username: str, output: str, overwrite: bool) -> None:
@@ -194,6 +234,20 @@ def build_parser() -> argparse.ArgumentParser:
         help="Read one replacement password line from standard input instead of prompting interactively.",
     )
 
+    audit = subparsers.add_parser(
+        "audit-attachments",
+        help=(
+            "Read-only integrity audit for one account's attachment metadata and owner-scoped filesystem bytes."
+        ),
+    )
+    audit.add_argument("--username", required=True)
+    audit.add_argument(
+        "--json",
+        action="store_true",
+        dest="json_output",
+        help="Emit the audit result as machine-readable JSON.",
+    )
+
     export = subparsers.add_parser(
         "export-library",
         help=(
@@ -254,6 +308,13 @@ def main() -> int:
                 username=args.username,
                 password_stdin=args.password_stdin,
             )
+        elif args.command == "audit-attachments":
+            clean = audit_attachments(
+                username=args.username,
+                json_output=args.json_output,
+            )
+            if not clean:
+                return 3
         elif args.command == "export-library":
             export_library(
                 username=args.username,
