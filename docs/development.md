@@ -17,7 +17,7 @@ cd backend
 python -m venv .venv
 source .venv/bin/activate
 python -m pip install -e '.[test]'
-fastapi dev
+uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
 The default API address is `http://127.0.0.1:8000`.
