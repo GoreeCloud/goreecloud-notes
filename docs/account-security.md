@@ -1,12 +1,30 @@
 # Account Security and Credential Recovery
 
-GoreeCloud Notes keeps account identity, password credentials, browser sessions, and temporary login-abuse state separate. This document records the Milestone 0 password-rotation, administrative-recovery, and bounded login-protection behavior implemented on the native development branch.
+GoreeCloud Notes keeps account identity, password credentials, browser sessions, temporary login-abuse state, and portable user-data export concerns separate. This document records the Milestone 0 password-rotation, administrative-recovery, bounded login-protection, and Account & Security browser behavior implemented on the native development branch.
 
 ## Password Policy
 
-New or replacement passwords must contain at least 12 characters and no more than 1,024 characters. The same boundary is enforced by the administrative CLI and authenticated password-rotation API. Password whitespace is treated as password content and is not trimmed or normalized.
+New or replacement passwords must contain at least 12 characters and no more than 1,024 characters. The same boundary is enforced by the administrative CLI, authenticated password-rotation API, and browser Account & Security form. Password whitespace is treated as password content and is not trimmed or normalized.
 
 Passwords are stored only as salted, versioned `scrypt` hashes. Raw passwords are not stored in PostgreSQL, source control, application logs, change logs, or recovery metadata. Failed login paths retain the scrypt verification cost for known, inactive, and unknown accounts so account state is not deliberately exposed through a cheap unknown-account path.
+
+## Account & Security Browser Page
+
+The Glaze UI exposes the authenticated account-security surface at:
+
+```text
+#account-security
+```
+
+The Notes workspace provides an **Account & Security** launcher that opens the page in a separate browser tab. This is deliberate while the editor uses explicit conflict-safe Save rather than autosave: opening account settings must not unmount the current Notes workspace and silently discard an unsaved draft.
+
+Before exposing authenticated controls, the page calls the existing `/api/v1/auth/me` boundary and confirms that the browser still has a live server-side session. The page shows the current account identity and does not expose password controls to an unauthenticated browser.
+
+The password form uses browser `current-password` and `new-password` autocomplete semantics and keeps current, replacement, and confirmation values only in React component state. The client checks the same 12-to-1,024-character password boundary enforced by the server, rejects a mismatched confirmation, and rejects obvious current-password reuse before submission. The backend remains authoritative for all credential validation and mutation.
+
+If a password change succeeds, every account session has already been revoked by the server and the current browser cookies have already been expired. The page therefore clears its local password state and returns to a sign-in-required state instead of issuing a misleading second logout request.
+
+The same page also exposes the user-facing **Download full library** portability control. That operation is independently authenticated and CSRF protected, uses the existing verified portable-export layer, and does not require the user to enter a password into the export workflow. Portable-export details and exclusions are documented in `docs/portable-export.md`.
 
 ## Authenticated Password Rotation
 
@@ -87,7 +105,9 @@ The live Compose authentication/security gates must prove all of the following b
 - rotating unknown usernames cannot evade the source-wide threshold;
 - an untrusted direct peer cannot bypass a source cooldown by spoofing `X-Forwarded-For`;
 - malformed and trusted proxy-chain source-selection behavior is covered by unit tests;
-- persisted rate-state structure contains opaque digest keys rather than clear account/source identifier columns.
+- persisted rate-state structure contains opaque digest keys rather than clear account/source identifier columns;
+- the browser Account & Security implementation compiles and lints through the locked frontend dependency graph; and
+- the browser portable-export control remains behind authenticated session plus CSRF protection and does not weaken the portable-export integrity boundary.
 
 ## Remaining Production Security Gates
 
