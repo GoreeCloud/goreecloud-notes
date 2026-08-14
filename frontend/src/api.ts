@@ -33,6 +33,17 @@ export type Tag = {
   updated_at: string;
 };
 
+export type Attachment = {
+  id: string;
+  note_id: string;
+  filename: string;
+  media_type: string;
+  size_bytes: number;
+  sha256: string;
+  created_at: string;
+  updated_at: string;
+};
+
 export type Note = {
   id: string;
   notebook_id: string | null;
@@ -87,7 +98,7 @@ async function apiFetch<T>(
   options: { csrf?: boolean } = {},
 ): Promise<T> {
   const headers = new Headers(init.headers);
-  if (init.body !== undefined && !headers.has("Content-Type")) {
+  if (typeof init.body === "string" && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
 
@@ -291,4 +302,33 @@ export function removeNoteTag(noteId: string, tagId: string): Promise<void> {
     { method: "DELETE" },
     { csrf: true },
   );
+}
+
+export function listAttachments(noteId: string): Promise<Attachment[]> {
+  return apiFetch<Attachment[]>(`/notes/${encodeURIComponent(noteId)}/attachments`);
+}
+
+export function uploadAttachment(noteId: string, file: File): Promise<Attachment> {
+  const params = new URLSearchParams({ filename: file.name });
+  return apiFetch<Attachment>(
+    `/notes/${encodeURIComponent(noteId)}/attachments?${params.toString()}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": file.type || "application/octet-stream" },
+      body: file,
+    },
+    { csrf: true },
+  );
+}
+
+export function deleteAttachment(attachmentId: string): Promise<void> {
+  return apiFetch<void>(
+    `/attachments/${encodeURIComponent(attachmentId)}`,
+    { method: "DELETE" },
+    { csrf: true },
+  );
+}
+
+export function attachmentDownloadUrl(attachmentId: string): string {
+  return `/api/v1/attachments/${encodeURIComponent(attachmentId)}`;
 }
