@@ -61,6 +61,15 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
+      - name: Regenerate frontend lockfile for dependency repair
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+
+      - name: Emit regenerated lockfile for review
+        run: |
+          echo '===GOREECLOUD_NOTES_LOCKFILE_BEGIN==='
+          cat package-lock.json
+          echo '===GOREECLOUD_NOTES_LOCKFILE_END==='
+
       - name: Install locked frontend dependencies
         run: npm ci --no-audit --no-fund
 
