@@ -1,6 +1,8 @@
 """FastAPI entry point for native GoreeCloud Notes."""
 
+import os
 from datetime import datetime
+from pathlib import Path
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request, Response, status
@@ -111,6 +113,22 @@ def _login_error(status_code: int, detail: str, *, retry_after: int | None = Non
     return HTTPException(status_code=status_code, detail=detail, headers=headers)
 
 
+def _attachment_storage_ready() -> bool:
+    """Check the configured attachment root without exposing its path or creating data."""
+
+    root = Path(settings.attachment_root).expanduser()
+    try:
+        if root.is_symlink():
+            return False
+        resolved = root.resolve(strict=True)
+    except (OSError, RuntimeError):
+        return False
+
+    if not resolved.is_dir():
+        return False
+    return os.access(resolved, os.R_OK | os.W_OK | os.X_OK)
+
+
 @app.get("/health", tags=["system"])
 def health() -> dict[str, str]:
     """Return a dependency-free, non-sensitive process liveness response."""
@@ -120,11 +138,11 @@ def health() -> dict[str, str]:
 
 @app.get("/ready", tags=["system"])
 def readiness() -> dict[str, str]:
-    """Report readiness only when PostgreSQL accepts a real query.
+    """Report readiness only when required persistence dependencies are usable.
 
-    The response intentionally exposes no database host, credential, schema, or
-    exception detail. Liveness remains available separately at ``/health`` so
-    dependency failure can be distinguished from process failure.
+    The response intentionally exposes no database host, credential, attachment
+    path, schema, or exception detail. Liveness remains available separately at
+    ``/health`` so dependency failure can be distinguished from process failure.
     """
 
     try:
@@ -133,7 +151,7 @@ def readiness() -> dict[str, str]:
     except SQLAlchemyError:
         raise HTTPException(status_code=503, detail="service unavailable") from None
 
-    if result != 1:
+    if result != 1 or not _attachment_storage_ready():
         raise HTTPException(status_code=503, detail="service unavailable")
 
     return {"status": "ready", "service": "goreecloud-notes-api"}
