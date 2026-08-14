@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useState } from "react";
 
 import { ApiError, changePassword, getCurrentUser, type CurrentUser } from "./api";
+import { downloadLibraryExport, saveLibraryExport } from "./libraryExport";
 
 const MIN_PASSWORD_LENGTH = 12;
 const MAX_PASSWORD_LENGTH = 1024;
@@ -25,6 +26,9 @@ export default function AccountSecurityPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState("");
+  const [exportSuccess, setExportSuccess] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -47,6 +51,15 @@ export default function AccountSecurityPage() {
       active = false;
     };
   }, []);
+
+  function expireLocalAccountState(message: string) {
+    setCurrentPassword("");
+    setNewPassword("");
+    setConfirmPassword("");
+    setUser(null);
+    setAccountState("unauthenticated");
+    setError(message);
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -84,17 +97,37 @@ export default function AccountSecurityPage() {
       setAccountState("unauthenticated");
     } catch (changeError) {
       if (changeError instanceof ApiError && changeError.status === 401) {
-        setCurrentPassword("");
-        setNewPassword("");
-        setConfirmPassword("");
-        setUser(null);
-        setAccountState("unauthenticated");
-        setError("Your session is no longer active. Sign in again before changing your password.");
+        expireLocalAccountState("Your session is no longer active. Sign in again before changing your password.");
       } else {
         setError(accountErrorMessage(changeError));
       }
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function handleLibraryExport() {
+    if (exporting) return;
+
+    setExportError("");
+    setExportSuccess("");
+    setExporting(true);
+    try {
+      const download = await downloadLibraryExport();
+      saveLibraryExport(download);
+      setExportSuccess(
+        download.sha256
+          ? `Verified ZIP download started. SHA-256: ${download.sha256}`
+          : "Verified ZIP download started.",
+      );
+    } catch (exportFailure) {
+      if (exportFailure instanceof ApiError && exportFailure.status === 401) {
+        expireLocalAccountState("Your session is no longer active. Sign in again before exporting your library.");
+      } else {
+        setExportError(accountErrorMessage(exportFailure));
+      }
+    } finally {
+      setExporting(false);
     }
   }
 
@@ -106,7 +139,7 @@ export default function AccountSecurityPage() {
             <p className="eyebrow">GoreeCloud Notes</p>
             <h1 id="account-security-title">Account &amp; Security</h1>
             <p className="account-security-intro">
-              Change your private Notes password without sending credentials to an email, SMS, or hosted identity provider.
+              Manage private account security and export a portable copy of your Notes library without relying on a hosted identity or storage provider.
             </p>
           </div>
           <button className="secondary-button" type="button" onClick={returnToNotes}>
@@ -135,7 +168,7 @@ export default function AccountSecurityPage() {
             ) : (
               <>
                 <strong>Sign in required.</strong>
-                <span>Open Notes and sign in before changing account security settings.</span>
+                <span>Open Notes and sign in before changing account security settings or exporting your library.</span>
               </>
             )}
             {error ? <span className="account-security-inline-error">{error}</span> : null}
@@ -175,7 +208,7 @@ export default function AccountSecurityPage() {
                   minLength={1}
                   maxLength={MAX_PASSWORD_LENGTH}
                   required
-                  disabled={busy}
+                  disabled={busy || exporting}
                 />
               </label>
 
@@ -189,7 +222,7 @@ export default function AccountSecurityPage() {
                   minLength={MIN_PASSWORD_LENGTH}
                   maxLength={MAX_PASSWORD_LENGTH}
                   required
-                  disabled={busy}
+                  disabled={busy || exporting}
                   aria-describedby="new-password-guidance"
                 />
               </label>
@@ -207,7 +240,7 @@ export default function AccountSecurityPage() {
                   minLength={MIN_PASSWORD_LENGTH}
                   maxLength={MAX_PASSWORD_LENGTH}
                   required
-                  disabled={busy}
+                  disabled={busy || exporting}
                 />
               </label>
 
@@ -217,12 +250,36 @@ export default function AccountSecurityPage() {
                 <button
                   className="primary-button"
                   type="submit"
-                  disabled={busy || !currentPassword || !newPassword || !confirmPassword}
+                  disabled={busy || exporting || !currentPassword || !newPassword || !confirmPassword}
                 >
                   {busy ? "Changing password…" : "Change password"}
                 </button>
               </div>
             </form>
+
+            <section className="account-security-portability" aria-labelledby="portable-export-heading">
+              <div className="account-security-section-heading">
+                <h2 id="portable-export-heading">Data portability</h2>
+                <p>
+                  Download a verified, provider-neutral ZIP containing your native Notes library, organization, revision history, attachment metadata, actual attachment bytes, and preserved migration provenance when present.
+                </p>
+              </div>
+              <p className="field-guidance portability-guidance">
+                Password hashes, browser sessions, CSRF material, login-rate state, deployment secrets, derived search indexes, and internal attachment storage paths are excluded from the portable bundle.
+              </p>
+              {exportError ? <p className="account-security-inline-error" role="alert">{exportError}</p> : null}
+              {exportSuccess ? <p className="account-security-export-success" role="status">{exportSuccess}</p> : null}
+              <div className="account-security-actions portability-actions">
+                <button
+                  className="primary-button"
+                  type="button"
+                  onClick={() => void handleLibraryExport()}
+                  disabled={busy || exporting}
+                >
+                  {exporting ? "Building verified export…" : "Download full library"}
+                </button>
+              </div>
+            </section>
           </>
         ) : null}
       </section>
