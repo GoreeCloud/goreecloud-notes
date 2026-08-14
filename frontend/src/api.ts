@@ -82,6 +82,14 @@ export type NotePatch = Partial<
   expected_content_version?: number;
 };
 
+const SAFE_IMAGE_PREVIEW_MEDIA_TYPES = new Set([
+  "image/avif",
+  "image/gif",
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+]);
+
 export class ApiError extends Error {
   readonly status: number;
 
@@ -379,4 +387,12 @@ export function deleteAttachment(attachmentId: string): Promise<void> {
 
 export function attachmentDownloadUrl(attachmentId: string): string {
   return `/api/v1/attachments/${encodeURIComponent(attachmentId)}`;
+}
+
+export function isAttachmentPreviewable(attachment: Attachment): boolean {
+  return SAFE_IMAGE_PREVIEW_MEDIA_TYPES.has(attachment.media_type.toLocaleLowerCase());
+}
+
+export function attachmentPreviewUrl(attachmentId: string): string {
+  return `/api/v1/attachments/${encodeURIComponent(attachmentId)}/preview`;
 }
