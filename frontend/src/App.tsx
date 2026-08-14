@@ -10,6 +10,7 @@ import {
   deleteTag,
   documentToText,
   getCurrentUser,
+  getNote,
   listNotebooks,
   listNotes,
   listNoteTags,
@@ -17,7 +18,6 @@ import {
   login as loginRequest,
   logout as logoutRequest,
   removeNoteTag,
-  textToDocument,
   trashNote,
   updateNote,
   type CurrentUser,
@@ -26,8 +26,11 @@ import {
   type NoteState,
   type Tag,
 } from "./api";
+import { documentsEqual, emptyDocument, type NoteDocument } from "./document";
+import { RichNoteEditor } from "./RichNoteEditor";
 
 type WorkspaceView = "home" | "notebook" | "tag" | "archive" | "trash" | "notebooks" | "tags";
+type SaveState = "Saved" | "Saving…" | "Not saved" | "Conflict";
 
 function SourceLink() {
   return (
@@ -38,10 +41,7 @@ function SourceLink() {
 }
 
 function messageFromError(error: unknown): string {
-  if (error instanceof ApiError) {
-    return error.message;
-  }
-  if (error instanceof Error) {
+  if (error instanceof ApiError || error instanceof Error) {
     return error.message;
   }
   return "An unexpected error occurred.";
@@ -61,7 +61,6 @@ function LoginScreen({ onAuthenticated }: LoginScreenProps) {
     event.preventDefault();
     setError("");
     setSubmitting(true);
-
     try {
       const user = await loginRequest(username, password);
       await onAuthenticated(user);
@@ -77,50 +76,28 @@ function LoginScreen({ onAuthenticated }: LoginScreenProps) {
       <section className="auth-card" aria-labelledby="login-heading">
         <div className="brand-row auth-brand">
           <div className="brand-mark" aria-hidden="true">G</div>
-          <div>
-            <strong>GoreeCloud</strong>
-            <span>Notes</span>
-          </div>
+          <div><strong>GoreeCloud</strong><span>Notes</span></div>
         </div>
-
         <div className="auth-copy">
           <p className="eyebrow">Private knowledge workspace</p>
           <h1 id="login-heading">Welcome back</h1>
           <p>Sign in with an account created by the GoreeCloud Notes administrator.</p>
         </div>
-
         <form className="auth-form" onSubmit={handleSubmit}>
           <label>
             <span>Username</span>
-            <input
-              autoComplete="username"
-              value={username}
-              onChange={(event) => setUsername(event.target.value)}
-              required
-            />
+            <input autoComplete="username" value={username} onChange={(event) => setUsername(event.target.value)} required />
           </label>
           <label>
             <span>Password</span>
-            <input
-              autoComplete="current-password"
-              type="password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              required
-            />
+            <input autoComplete="current-password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} required />
           </label>
-
           {error ? <p className="form-error" role="alert">{error}</p> : null}
-
           <button className="primary-button" type="submit" disabled={submitting}>
             {submitting ? "Signing in…" : "Sign in"}
           </button>
         </form>
-
-        <footer className="auth-footer">
-          <span>Private by default · AGPL-3.0-only</span>
-          <SourceLink />
-        </footer>
+        <footer className="auth-footer"><span>Private by default · AGPL-3.0-only</span><SourceLink /></footer>
       </section>
     </main>
   );
@@ -137,91 +114,69 @@ function App() {
   const [filterId, setFilterId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
-  const [body, setBody] = useState("");
+  const [editorDocument, setEditorDocument] = useState<NoteDocument>(() => emptyDocument());
   const [editorNotebookId, setEditorNotebookId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [saveState, setSaveState] = useState("Saved");
+  const [saveState, setSaveState] = useState<SaveState>("Saved");
   const [newNotebookName, setNewNotebookName] = useState("");
-  const [newNotebookParent, setNewNotebookParent] = useState<string>("");
+  const [newNotebookParent, setNewNotebookParent] = useState("");
   const [newTagName, setNewTagName] = useState("");
 
   const selectedNote = notes.find((note) => note.id === selectedId) ?? null;
-  const dirty = selectedNote
-    ? selectedNote.title !== title ||
-      documentToText(selectedNote.document) !== body ||
-      selectedNote.notebook_id !== editorNotebookId
+  const contentDirty = selectedNote
+    ? selectedNote.title !== title || !documentsEqual(selectedNote.document, editorDocument)
     : false;
+  const dirty = selectedNote
+    ? contentDirty || selectedNote.notebook_id !== editorNotebookId
+    : false;
+  const conflict = saveState === "Conflict";
 
   const visibleNotes = useMemo(() => {
-    const query = search.trim().toLowerCase();
-    if (!query) {
-      return notes;
-    }
-
-    return notes.filter((note) => {
-      const haystack = `${note.title}\n${documentToText(note.document)}`.toLowerCase();
-      return haystack.includes(query);
-    });
+    const query = search.trim().toLocaleLowerCase();
+    if (!query) return notes;
+    return notes.filter((note) => `${note.title}\n${documentToText(note.document)}`.toLocaleLowerCase().includes(query));
   }, [notes, search]);
 
   const currentNotebook = view === "notebook" ? notebooks.find((item) => item.id === filterId) ?? null : null;
   const currentTag = view === "tag" ? tags.find((item) => item.id === filterId) ?? null : null;
   const noteState: NoteState = view === "archive" ? "archived" : view === "trash" ? "trashed" : "normal";
   const managementView = view === "notebooks" || view === "tags";
+  const paneTitle = view === "notebook" ? currentNotebook?.name ?? "Notebook"
+    : view === "tag" ? currentTag?.name ?? "Tag"
+      : view === "archive" ? "Archive"
+        : view === "trash" ? "Trash"
+          : view === "notebooks" ? "Notebooks"
+            : view === "tags" ? "Tags" : "Quick Notes";
+  const paneEyebrow = view === "notebook" ? "Notebook"
+    : view === "tag" ? "Tag"
+      : view === "archive" || view === "trash" ? "Library"
+        : managementView ? "Organize" : "Home";
 
-  const paneTitle =
-    view === "notebook"
-      ? currentNotebook?.name ?? "Notebook"
-      : view === "tag"
-        ? currentTag?.name ?? "Tag"
-        : view === "archive"
-          ? "Archive"
-          : view === "trash"
-            ? "Trash"
-            : view === "notebooks"
-              ? "Notebooks"
-              : view === "tags"
-                ? "Tags"
-                : "Quick Notes";
-
-  const paneEyebrow =
-    view === "notebook"
-      ? "Notebook"
-      : view === "tag"
-        ? "Tag"
-        : view === "archive" || view === "trash"
-          ? "Library"
-          : view === "notebooks" || view === "tags"
-            ? "Organize"
-            : "Home";
-
-  function resetEditor() {
-    setSelectedId(null);
-    setTitle("");
-    setBody("");
-    setEditorNotebookId(null);
-    setActiveNoteTags([]);
+  function applyEditorNote(note: Note | null) {
+    if (!note) {
+      setSelectedId(null);
+      setTitle("");
+      setEditorDocument(emptyDocument());
+      setEditorNotebookId(null);
+      setActiveNoteTags([]);
+      setSaveState("Saved");
+      return;
+    }
+    setSelectedId(note.id);
+    setTitle(note.title);
+    setEditorDocument(note.document);
+    setEditorNotebookId(note.notebook_id);
     setSaveState("Saved");
   }
 
   async function openNote(note: Note | null) {
-    if (note === null) {
-      resetEditor();
-      return;
-    }
-
-    setSelectedId(note.id);
-    setTitle(note.title);
-    setBody(documentToText(note.document));
-    setEditorNotebookId(note.notebook_id);
-    setSaveState("Saved");
+    applyEditorNote(note);
     setError("");
-
+    if (!note) return;
     try {
-      const assigned = await listNoteTags(note.id);
-      setActiveNoteTags(assigned);
+      setActiveNoteTags(await listNoteTags(note.id));
     } catch (caught) {
       setActiveNoteTags([]);
       setError(messageFromError(caught));
@@ -229,11 +184,7 @@ function App() {
   }
 
   async function hydrateWorkspace(authenticatedUser: CurrentUser) {
-    const [loadedNotes, loadedNotebooks, loadedTags] = await Promise.all([
-      listNotes(),
-      listNotebooks(),
-      listTags(),
-    ]);
+    const [loadedNotes, loadedNotebooks, loadedTags] = await Promise.all([listNotes(), listNotebooks(), listTags()]);
     setUser(authenticatedUser);
     setNotes(loadedNotes);
     setNotebooks(loadedNotebooks);
@@ -244,51 +195,30 @@ function App() {
 
   useEffect(() => {
     let cancelled = false;
-
     async function bootstrap() {
       try {
         const currentUser = await getCurrentUser();
-        const [loadedNotes, loadedNotebooks, loadedTags] = await Promise.all([
-          listNotes(),
-          listNotebooks(),
-          listTags(),
-        ]);
-        if (cancelled) {
-          return;
-        }
-
+        const [loadedNotes, loadedNotebooks, loadedTags] = await Promise.all([listNotes(), listNotebooks(), listTags()]);
+        if (cancelled) return;
         setUser(currentUser);
         setNotes(loadedNotes);
         setNotebooks(loadedNotebooks);
         setTags(loadedTags);
         setAuthState("authenticated");
-        if (loadedNotes[0]) {
-          setSelectedId(loadedNotes[0].id);
-          setTitle(loadedNotes[0].title);
-          setBody(documentToText(loadedNotes[0].document));
-          setEditorNotebookId(loadedNotes[0].notebook_id);
-          const assigned = await listNoteTags(loadedNotes[0].id);
-          if (!cancelled) {
-            setActiveNoteTags(assigned);
-          }
+        const first = loadedNotes[0] ?? null;
+        applyEditorNote(first);
+        if (first) {
+          const assigned = await listNoteTags(first.id);
+          if (!cancelled) setActiveNoteTags(assigned);
         }
       } catch (caught) {
-        if (cancelled) {
-          return;
-        }
-        if (caught instanceof ApiError && caught.status === 401) {
-          setAuthState("unauthenticated");
-        } else {
-          setError(messageFromError(caught));
-          setAuthState("unauthenticated");
-        }
+        if (cancelled) return;
+        if (!(caught instanceof ApiError && caught.status === 401)) setError(messageFromError(caught));
+        setAuthState("unauthenticated");
       }
     }
-
     void bootstrap();
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, []);
 
   async function changeView(nextView: WorkspaceView, nextFilterId: string | null = null) {
@@ -296,12 +226,10 @@ function App() {
     setFilterId(nextFilterId);
     setSearch("");
     setError("");
-
     if (nextView === "notebooks" || nextView === "tags") {
-      resetEditor();
+      applyEditorNote(null);
       return;
     }
-
     setBusy(true);
     try {
       const state: NoteState = nextView === "archive" ? "archived" : nextView === "trash" ? "trashed" : "normal";
@@ -315,7 +243,7 @@ function App() {
     } catch (caught) {
       setError(messageFromError(caught));
       setNotes([]);
-      resetEditor();
+      applyEditorNote(null);
     } finally {
       setBusy(false);
     }
@@ -325,12 +253,8 @@ function App() {
     setBusy(true);
     setError("");
     try {
-      const notebookId = view === "notebook" ? filterId : null;
-      const note = await createNote(notebookId);
-      if (view === "tag" && filterId) {
-        await assignNoteTag(note.id, filterId);
-      }
-
+      const note = await createNote(view === "notebook" ? filterId : null);
+      if (view === "tag" && filterId) await assignNoteTag(note.id, filterId);
       if (view === "archive" || view === "trash" || managementView) {
         setView("home");
         setFilterId(null);
@@ -349,26 +273,45 @@ function App() {
   }
 
   async function handleSave() {
-    if (!selectedNote || !dirty) {
-      return;
-    }
-
+    if (!selectedNote || !dirty || conflict) return;
     setBusy(true);
     setError("");
     setSaveState("Saving…");
     try {
       const updated = await updateNote(selectedNote.id, {
         title,
-        document: textToDocument(body),
+        document: editorDocument,
         notebook_id: editorNotebookId,
+        expected_content_version: selectedNote.content_version,
       });
-      setNotes((current) => current.map((note) => (note.id === updated.id ? updated : note)));
+      setNotes((current) => current.map((note) => note.id === updated.id ? updated : note));
       setTitle(updated.title);
-      setBody(documentToText(updated.document));
+      setEditorDocument(updated.document);
       setEditorNotebookId(updated.notebook_id);
       setSaveState("Saved");
     } catch (caught) {
-      setSaveState("Not saved");
+      if (caught instanceof ApiError && caught.status === 409) {
+        setSaveState("Conflict");
+        setError("This note changed somewhere else. Your local draft has not overwritten the newer server copy. Reload the server version before continuing.");
+      } else {
+        setSaveState("Not saved");
+        setError(messageFromError(caught));
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleReloadServerVersion() {
+    if (!selectedNote) return;
+    setBusy(true);
+    setError("");
+    try {
+      const current = await getNote(selectedNote.id);
+      setNotes((items) => items.map((note) => note.id === current.id ? current : note));
+      applyEditorNote(current);
+      setActiveNoteTags(await listNoteTags(current.id));
+    } catch (caught) {
       setError(messageFromError(caught));
     } finally {
       setBusy(false);
@@ -376,10 +319,7 @@ function App() {
   }
 
   async function handleTrash() {
-    if (!selectedNote) {
-      return;
-    }
-
+    if (!selectedNote) return;
     setBusy(true);
     setError("");
     try {
@@ -387,18 +327,12 @@ function App() {
       const remaining = notes.filter((note) => note.id !== selectedNote.id);
       setNotes(remaining);
       await openNote(remaining[0] ?? null);
-    } catch (caught) {
-      setError(messageFromError(caught));
-    } finally {
-      setBusy(false);
-    }
+    } catch (caught) { setError(messageFromError(caught)); }
+    finally { setBusy(false); }
   }
 
   async function handleStateChange(state: NoteState) {
-    if (!selectedNote) {
-      return;
-    }
-
+    if (!selectedNote) return;
     setBusy(true);
     setError("");
     try {
@@ -406,39 +340,25 @@ function App() {
       const remaining = notes.filter((note) => note.id !== selectedNote.id);
       setNotes(remaining);
       await openNote(remaining[0] ?? null);
-    } catch (caught) {
-      setError(messageFromError(caught));
-    } finally {
-      setBusy(false);
-    }
+    } catch (caught) { setError(messageFromError(caught)); }
+    finally { setBusy(false); }
   }
 
   async function handlePinToggle() {
-    if (!selectedNote) {
-      return;
-    }
-
+    if (!selectedNote) return;
     setBusy(true);
     setError("");
     try {
       const updated = await updateNote(selectedNote.id, { is_pinned: !selectedNote.is_pinned });
-      setNotes((current) =>
-        current
-          .map((note) => (note.id === updated.id ? updated : note))
-          .sort((left, right) => Number(right.is_pinned) - Number(left.is_pinned)),
-      );
-    } catch (caught) {
-      setError(messageFromError(caught));
-    } finally {
-      setBusy(false);
-    }
+      setNotes((current) => current
+        .map((note) => note.id === updated.id ? updated : note)
+        .sort((left, right) => Number(right.is_pinned) - Number(left.is_pinned)));
+    } catch (caught) { setError(messageFromError(caught)); }
+    finally { setBusy(false); }
   }
 
   async function handleTagToggle(tag: Tag) {
-    if (!selectedNote) {
-      return;
-    }
-
+    if (!selectedNote) return;
     setBusy(true);
     setError("");
     const assigned = activeNoteTags.some((item) => item.id === tag.id);
@@ -450,20 +370,14 @@ function App() {
         await assignNoteTag(selectedNote.id, tag.id);
         setActiveNoteTags((current) => [...current, tag].sort((a, b) => a.name.localeCompare(b.name)));
       }
-    } catch (caught) {
-      setError(messageFromError(caught));
-    } finally {
-      setBusy(false);
-    }
+    } catch (caught) { setError(messageFromError(caught)); }
+    finally { setBusy(false); }
   }
 
   async function handleCreateNotebook(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const name = newNotebookName.trim();
-    if (!name) {
-      return;
-    }
-
+    if (!name) return;
     setBusy(true);
     setError("");
     try {
@@ -471,11 +385,8 @@ function App() {
       setNotebooks((current) => [...current, notebook].sort((a, b) => a.name.localeCompare(b.name)));
       setNewNotebookName("");
       setNewNotebookParent("");
-    } catch (caught) {
-      setError(messageFromError(caught));
-    } finally {
-      setBusy(false);
-    }
+    } catch (caught) { setError(messageFromError(caught)); }
+    finally { setBusy(false); }
   }
 
   async function handleDeleteNotebook(notebook: Notebook) {
@@ -484,34 +395,23 @@ function App() {
     try {
       await deleteNotebook(notebook.id);
       setNotebooks((current) => current.filter((item) => item.id !== notebook.id));
-      if (filterId === notebook.id) {
-        await changeView("home");
-      }
-    } catch (caught) {
-      setError(messageFromError(caught));
-    } finally {
-      setBusy(false);
-    }
+      if (filterId === notebook.id) await changeView("home");
+    } catch (caught) { setError(messageFromError(caught)); }
+    finally { setBusy(false); }
   }
 
   async function handleCreateTag(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const name = newTagName.trim();
-    if (!name) {
-      return;
-    }
-
+    if (!name) return;
     setBusy(true);
     setError("");
     try {
       const tag = await createTag(name);
       setTags((current) => [...current, tag].sort((a, b) => a.name.localeCompare(b.name)));
       setNewTagName("");
-    } catch (caught) {
-      setError(messageFromError(caught));
-    } finally {
-      setBusy(false);
-    }
+    } catch (caught) { setError(messageFromError(caught)); }
+    finally { setBusy(false); }
   }
 
   async function handleDeleteTag(tag: Tag) {
@@ -521,14 +421,9 @@ function App() {
       await deleteTag(tag.id);
       setTags((current) => current.filter((item) => item.id !== tag.id));
       setActiveNoteTags((current) => current.filter((item) => item.id !== tag.id));
-      if (filterId === tag.id) {
-        await changeView("home");
-      }
-    } catch (caught) {
-      setError(messageFromError(caught));
-    } finally {
-      setBusy(false);
-    }
+      if (filterId === tag.id) await changeView("home");
+    } catch (caught) { setError(messageFromError(caught)); }
+    finally { setBusy(false); }
   }
 
   async function handleLogout() {
@@ -540,346 +435,108 @@ function App() {
       setNotes([]);
       setNotebooks([]);
       setTags([]);
-      resetEditor();
+      applyEditorNote(null);
       setAuthState("unauthenticated");
-    } catch (caught) {
-      setError(messageFromError(caught));
-    } finally {
-      setBusy(false);
-    }
+    } catch (caught) { setError(messageFromError(caught)); }
+    finally { setBusy(false); }
   }
 
   if (authState === "loading") {
-    return (
-      <main className="loading-shell" aria-live="polite">
-        <div className="brand-mark" aria-hidden="true">G</div>
-        <span>Opening GoreeCloud Notes…</span>
-      </main>
-    );
+    return <main className="loading-shell" aria-live="polite"><div className="brand-mark" aria-hidden="true">G</div><span>Opening GoreeCloud Notes…</span></main>;
   }
-
-  if (authState === "unauthenticated") {
-    return <LoginScreen onAuthenticated={hydrateWorkspace} />;
-  }
+  if (authState === "unauthenticated") return <LoginScreen onAuthenticated={hydrateWorkspace} />;
 
   return (
     <main className="app-shell">
       <aside className="sidebar" aria-label="GoreeCloud Notes navigation">
-        <div className="brand-row">
-          <div className="brand-mark" aria-hidden="true">G</div>
-          <div>
-            <strong>GoreeCloud</strong>
-            <span>Notes</span>
-          </div>
-        </div>
-
-        <button className="new-note" type="button" onClick={handleCreateNote} disabled={busy}>
-          + New note
-        </button>
-
+        <div className="brand-row"><div className="brand-mark" aria-hidden="true">G</div><div><strong>GoreeCloud</strong><span>Notes</span></div></div>
+        <button className="new-note" type="button" onClick={handleCreateNote} disabled={busy}>+ New note</button>
         <nav>
-          <button className={`nav-item${view === "home" ? " active" : ""}`} type="button" onClick={() => void changeView("home")}>
-            Home
-          </button>
-          <button className={`nav-item${view === "notebooks" || view === "notebook" ? " active" : ""}`} type="button" onClick={() => void changeView("notebooks")}>
-            Notebooks
-          </button>
-          <button className={`nav-item${view === "tags" || view === "tag" ? " active" : ""}`} type="button" onClick={() => void changeView("tags")}>
-            Tags
-          </button>
-          <button className={`nav-item${view === "archive" ? " active" : ""}`} type="button" onClick={() => void changeView("archive")}>
-            Archive
-          </button>
-          <button className={`nav-item${view === "trash" ? " active" : ""}`} type="button" onClick={() => void changeView("trash")}>
-            Trash
-          </button>
+          <button className={`nav-item${view === "home" ? " active" : ""}`} type="button" onClick={() => void changeView("home")}>Home</button>
+          <button className={`nav-item${view === "notebooks" || view === "notebook" ? " active" : ""}`} type="button" onClick={() => void changeView("notebooks")}>Notebooks</button>
+          <button className={`nav-item${view === "tags" || view === "tag" ? " active" : ""}`} type="button" onClick={() => void changeView("tags")}>Tags</button>
+          <button className={`nav-item${view === "archive" ? " active" : ""}`} type="button" onClick={() => void changeView("archive")}>Archive</button>
+          <button className={`nav-item${view === "trash" ? " active" : ""}`} type="button" onClick={() => void changeView("trash")}>Trash</button>
         </nav>
-
         <div className="sidebar-library">
           {notebooks.slice(0, 5).map((notebook) => (
-            <button
-              className={`sidebar-library-item${view === "notebook" && filterId === notebook.id ? " active" : ""}`}
-              type="button"
-              key={notebook.id}
-              onClick={() => void changeView("notebook", notebook.id)}
-            >
-              <span aria-hidden="true">▱</span>
-              <span>{notebook.name}</span>
-            </button>
+            <button className={`sidebar-library-item${view === "notebook" && filterId === notebook.id ? " active" : ""}`} type="button" key={notebook.id} onClick={() => void changeView("notebook", notebook.id)}><span aria-hidden="true">▱</span><span>{notebook.name}</span></button>
           ))}
           {tags.slice(0, 5).map((tag) => (
-            <button
-              className={`sidebar-library-item${view === "tag" && filterId === tag.id ? " active" : ""}`}
-              type="button"
-              key={tag.id}
-              onClick={() => void changeView("tag", tag.id)}
-            >
-              <span aria-hidden="true">#</span>
-              <span>{tag.name}</span>
-            </button>
+            <button className={`sidebar-library-item${view === "tag" && filterId === tag.id ? " active" : ""}`} type="button" key={tag.id} onClick={() => void changeView("tag", tag.id)}><span aria-hidden="true">#</span><span>{tag.name}</span></button>
           ))}
         </div>
-
-        <div className="sidebar-footer account-footer">
-          <div>
-            <span className="status-dot" aria-hidden="true" />
-            <span className="account-name">{user?.display_name}</span>
-          </div>
-          <button type="button" onClick={handleLogout} disabled={busy}>Sign out</button>
-        </div>
+        <div className="sidebar-footer account-footer"><div><span className="status-dot" aria-hidden="true" /><span className="account-name">{user?.display_name}</span></div><button type="button" onClick={handleLogout} disabled={busy}>Sign out</button></div>
       </aside>
 
       <section className="note-list-pane" aria-label={managementView ? paneTitle : "Notes"}>
-        <header className="pane-header">
-          <div>
-            <p className="eyebrow">{paneEyebrow}</p>
-            <h1>{paneTitle}</h1>
-          </div>
-          {!managementView ? <span className="note-count">{notes.length}</span> : null}
-        </header>
-
+        <header className="pane-header"><div><p className="eyebrow">{paneEyebrow}</p><h1>{paneTitle}</h1></div>{!managementView ? <span className="note-count">{notes.length}</span> : null}</header>
         {error ? <p className="workspace-error" role="alert">{error}</p> : null}
 
         {view === "notebooks" ? (
           <div className="manager-stack">
             <form className="manager-create" onSubmit={handleCreateNotebook}>
-              <input
-                aria-label="New notebook name"
-                placeholder="New notebook"
-                value={newNotebookName}
-                onChange={(event) => setNewNotebookName(event.target.value)}
-                required
-              />
-              <select
-                aria-label="Parent notebook"
-                value={newNotebookParent}
-                onChange={(event) => setNewNotebookParent(event.target.value)}
-              >
-                <option value="">No parent</option>
-                {notebooks.map((notebook) => (
-                  <option value={notebook.id} key={notebook.id}>{notebook.name}</option>
-                ))}
-              </select>
+              <input aria-label="New notebook name" placeholder="New notebook" value={newNotebookName} onChange={(event) => setNewNotebookName(event.target.value)} required />
+              <select aria-label="Parent notebook" value={newNotebookParent} onChange={(event) => setNewNotebookParent(event.target.value)}><option value="">No parent</option>{notebooks.map((notebook) => <option value={notebook.id} key={notebook.id}>{notebook.name}</option>)}</select>
               <button className="primary-button" type="submit" disabled={busy}>Create notebook</button>
             </form>
-
             <div className="manager-list">
-              {notebooks.map((notebook) => (
-                <article className="manager-row" key={notebook.id}>
-                  <div>
-                    <strong>{notebook.name}</strong>
-                    <span>{notebook.parent_id ? "Nested notebook" : "Top-level notebook"}</span>
-                  </div>
-                  <div className="manager-actions">
-                    <button type="button" onClick={() => void changeView("notebook", notebook.id)}>Open</button>
-                    <button type="button" onClick={() => void handleDeleteNotebook(notebook)} disabled={busy}>Delete</button>
-                  </div>
-                </article>
-              ))}
+              {notebooks.map((notebook) => <article className="manager-row" key={notebook.id}><div><strong>{notebook.name}</strong><span>{notebook.parent_id ? "Nested notebook" : "Top-level notebook"}</span></div><div className="manager-actions"><button type="button" onClick={() => void changeView("notebook", notebook.id)}>Open</button><button type="button" onClick={() => void handleDeleteNotebook(notebook)} disabled={busy}>Delete</button></div></article>)}
               {notebooks.length === 0 ? <div className="empty-list"><strong>No notebooks yet</strong><span>Create a notebook to organize related notes.</span></div> : null}
             </div>
           </div>
         ) : view === "tags" ? (
           <div className="manager-stack">
-            <form className="manager-create" onSubmit={handleCreateTag}>
-              <input
-                aria-label="New tag name"
-                placeholder="New tag"
-                value={newTagName}
-                onChange={(event) => setNewTagName(event.target.value)}
-                required
-              />
-              <button className="primary-button" type="submit" disabled={busy}>Create tag</button>
-            </form>
-
+            <form className="manager-create" onSubmit={handleCreateTag}><input aria-label="New tag name" placeholder="New tag" value={newTagName} onChange={(event) => setNewTagName(event.target.value)} required /><button className="primary-button" type="submit" disabled={busy}>Create tag</button></form>
             <div className="manager-list">
-              {tags.map((tag) => (
-                <article className="manager-row" key={tag.id}>
-                  <div>
-                    <strong>#{tag.name}</strong>
-                    <span>Private organizational tag</span>
-                  </div>
-                  <div className="manager-actions">
-                    <button type="button" onClick={() => void changeView("tag", tag.id)}>Open</button>
-                    <button type="button" onClick={() => void handleDeleteTag(tag)} disabled={busy}>Delete</button>
-                  </div>
-                </article>
-              ))}
+              {tags.map((tag) => <article className="manager-row" key={tag.id}><div><strong>#{tag.name}</strong><span>Private organizational tag</span></div><div className="manager-actions"><button type="button" onClick={() => void changeView("tag", tag.id)}>Open</button><button type="button" onClick={() => void handleDeleteTag(tag)} disabled={busy}>Delete</button></div></article>)}
               {tags.length === 0 ? <div className="empty-list"><strong>No tags yet</strong><span>Create tags for flexible organization across notebooks.</span></div> : null}
             </div>
           </div>
         ) : (
           <>
-            <label className="search-box">
-              <span aria-hidden="true">⌕</span>
-              <input
-                type="search"
-                placeholder="Search loaded notes"
-                aria-label="Search notes"
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-              />
-            </label>
-
-            {noteState === "normal" ? (
-              <button className="quick-capture" type="button" onClick={handleCreateNote} disabled={busy}>
-                <span>Take a note…</span>
-                <span className="quick-actions" aria-hidden="true">＋</span>
-              </button>
-            ) : null}
-
+            <label className="search-box"><span aria-hidden="true">⌕</span><input type="search" placeholder="Search loaded notes" aria-label="Search notes" value={search} onChange={(event) => setSearch(event.target.value)} /></label>
+            {noteState === "normal" ? <button className="quick-capture" type="button" onClick={handleCreateNote} disabled={busy}><span>Take a note…</span><span className="quick-actions" aria-hidden="true">＋</span></button> : null}
             <div className="notes-stack">
-              {visibleNotes.map((note) => {
-                const preview = documentToText(note.document) || "Empty note";
-                return (
-                  <button
-                    className={`note-card${note.id === selectedId ? " selected" : ""}`}
-                    type="button"
-                    key={note.id}
-                    onClick={() => void openNote(note)}
-                  >
-                    <div className="note-card-heading">
-                      <h2>{note.title || "Untitled"}</h2>
-                      {note.is_pinned ? <span title="Pinned" aria-label="Pinned">●</span> : null}
-                    </div>
-                    <p>{preview}</p>
-                    <small>{new Date(note.updated_at).toLocaleString()}</small>
-                  </button>
-                );
-              })}
-              {visibleNotes.length === 0 ? (
-                <div className="empty-list">
-                  <strong>{notes.length === 0 ? `No ${paneTitle.toLowerCase()} notes` : "No matching notes"}</strong>
-                  <span>{notes.length === 0 ? "Nothing is stored in this view yet." : "Try another search."}</span>
-                </div>
-              ) : null}
+              {visibleNotes.map((note) => <button className={`note-card${note.id === selectedId ? " selected" : ""}`} type="button" key={note.id} onClick={() => void openNote(note)}><div className="note-card-heading"><h2>{note.title || "Untitled"}</h2>{note.is_pinned ? <span title="Pinned" aria-label="Pinned">●</span> : null}</div><p>{documentToText(note.document) || "Empty note"}</p><small>{new Date(note.updated_at).toLocaleString()}</small></button>)}
+              {visibleNotes.length === 0 ? <div className="empty-list"><strong>{notes.length === 0 ? `No ${paneTitle.toLocaleLowerCase()} notes` : "No matching notes"}</strong><span>{notes.length === 0 ? "Nothing is stored in this view yet." : "Try another search."}</span></div> : null}
             </div>
           </>
         )}
-
-        <footer className="mobile-source-footer">
-          <span>AGPL-3.0-only</span>
-          <span aria-hidden="true"> · </span>
-          <SourceLink />
-        </footer>
+        <footer className="mobile-source-footer"><span>AGPL-3.0-only</span><span aria-hidden="true"> · </span><SourceLink /></footer>
       </section>
 
       <section className="editor-pane" aria-label="Note editor">
         {managementView ? (
-          <div className="empty-editor organization-editor">
-            <p className="eyebrow">Organization</p>
-            <h2>{view === "notebooks" ? "Structure your knowledge." : "Connect ideas across notebooks."}</h2>
-            <p>
-              {view === "notebooks"
-                ? "Notebooks provide hierarchy. Deleting a notebook preserves its notes and returns them to the unfiled library."
-                : "Tags provide flexible cross-notebook organization and can be assigned directly from the note editor."}
-            </p>
-          </div>
+          <div className="empty-editor organization-editor"><p className="eyebrow">Organization</p><h2>{view === "notebooks" ? "Structure your knowledge." : "Connect ideas across notebooks."}</h2><p>{view === "notebooks" ? "Notebooks provide hierarchy. Deleting a notebook preserves its notes and returns them to the unfiled library." : "Tags provide flexible cross-notebook organization and can be assigned directly from the note editor."}</p></div>
         ) : selectedNote ? (
           <>
             <header className="editor-toolbar">
               <div className="crumbs">{paneTitle} / {selectedNote.title || "Untitled"}</div>
               <div className="toolbar-actions editor-actions">
-                <span className={`save-state${dirty ? " dirty" : ""}`}>{dirty ? "Unsaved changes" : saveState}</span>
-                {noteState === "normal" ? (
-                  <>
-                    <button type="button" onClick={() => void handlePinToggle()} disabled={busy}>
-                      {selectedNote.is_pinned ? "Unpin" : "Pin"}
-                    </button>
-                    <button type="button" onClick={() => void handleStateChange("archived")} disabled={busy}>Archive</button>
-                    <button type="button" onClick={handleTrash} disabled={busy}>Trash</button>
-                  </>
-                ) : (
-                  <button type="button" onClick={() => void handleStateChange("normal")} disabled={busy}>Restore</button>
-                )}
-                <button className="save-button" type="button" onClick={handleSave} disabled={busy || !dirty}>
-                  Save
-                </button>
+                <span className={`save-state${dirty ? " dirty" : ""}`}>{conflict ? "Conflict" : dirty ? "Unsaved changes" : saveState}</span>
+                {conflict ? <button type="button" onClick={() => void handleReloadServerVersion()} disabled={busy}>Reload server version</button> : null}
+                {noteState === "normal" ? <><button type="button" onClick={() => void handlePinToggle()} disabled={busy || conflict}>{selectedNote.is_pinned ? "Unpin" : "Pin"}</button><button type="button" onClick={() => void handleStateChange("archived")} disabled={busy || conflict}>Archive</button><button type="button" onClick={handleTrash} disabled={busy || conflict}>Trash</button></> : <button type="button" onClick={() => void handleStateChange("normal")} disabled={busy || conflict}>Restore</button>}
+                <button className="save-button" type="button" onClick={handleSave} disabled={busy || !dirty || conflict}>Save</button>
               </div>
             </header>
 
             <article className="editor-surface live-editor">
               <p className="eyebrow">Private note</p>
-              <input
-                className="title-input"
-                aria-label="Note title"
-                placeholder="Untitled"
-                value={title}
-                onChange={(event) => setTitle(event.target.value)}
-              />
-
+              <input className="title-input" aria-label="Note title" placeholder="Untitled" value={title} onChange={(event) => setTitle(event.target.value)} disabled={conflict} />
               <div className="note-metadata-controls">
-                <label>
-                  <span>Notebook</span>
-                  <select
-                    value={editorNotebookId ?? ""}
-                    onChange={(event) => setEditorNotebookId(event.target.value || null)}
-                  >
-                    <option value="">Unfiled</option>
-                    {notebooks.map((notebook) => (
-                      <option value={notebook.id} key={notebook.id}>{notebook.name}</option>
-                    ))}
-                  </select>
-                </label>
-                <div className="tag-assignment" aria-label="Note tags">
-                  <span>Tags</span>
-                  <div className="tag-chip-list">
-                    {tags.map((tag) => {
-                      const assigned = activeNoteTags.some((item) => item.id === tag.id);
-                      return (
-                        <button
-                          className={`tag-chip${assigned ? " assigned" : ""}`}
-                          type="button"
-                          aria-pressed={assigned}
-                          key={tag.id}
-                          onClick={() => void handleTagToggle(tag)}
-                          disabled={busy}
-                        >
-                          #{tag.name}
-                        </button>
-                      );
-                    })}
-                    {tags.length === 0 ? <span className="no-tags">No tags created</span> : null}
-                  </div>
-                </div>
+                <label><span>Notebook</span><select value={editorNotebookId ?? ""} onChange={(event) => setEditorNotebookId(event.target.value || null)} disabled={conflict}><option value="">Unfiled</option>{notebooks.map((notebook) => <option value={notebook.id} key={notebook.id}>{notebook.name}</option>)}</select></label>
+                <div className="tag-assignment" aria-label="Note tags"><span>Tags</span><div className="tag-chip-list">{tags.map((tag) => { const assigned = activeNoteTags.some((item) => item.id === tag.id); return <button className={`tag-chip${assigned ? " assigned" : ""}`} type="button" aria-pressed={assigned} key={tag.id} onClick={() => void handleTagToggle(tag)} disabled={busy || conflict}>#{tag.name}</button>; })}{tags.length === 0 ? <span className="no-tags">No tags created</span> : null}</div></div>
               </div>
-
-              <p className="editor-meta">
-                Structured GoreeCloud document · manual save during Milestone 0
-              </p>
-              <textarea
-                className="body-editor"
-                aria-label="Note body"
-                placeholder="Start writing…"
-                value={body}
-                onChange={(event) => setBody(event.target.value)}
-              />
-              <div className="callout foundation-callout">
-                <strong>Native organization is active</strong>
-                <span>
-                  Notebooks, tags, pinning, Archive, revisions, and recoverable Trash now use the user-isolated PostgreSQL API. Rich-text editing and autosave remain later gates.
-                </span>
-              </div>
+              <p className="editor-meta">Structured GoreeCloud document · content version {selectedNote.content_version}</p>
+              <RichNoteEditor noteId={selectedNote.id} value={editorDocument} onChange={setEditorDocument} disabled={busy || conflict} />
+              <div className="callout foundation-callout"><strong>{conflict ? "Conflict protection is active" : "Native rich editing is active"}</strong><span>{conflict ? "The local editor is locked until you reload the current server version, preventing a stale draft from overwriting newer content." : "Rich text is converted through the GoreeCloud-owned document contract and saved with optimistic concurrency protection."}</span></div>
             </article>
           </>
         ) : (
-          <div className="empty-editor">
-            <p className="eyebrow">GoreeCloud Notes</p>
-            <h2>{noteState === "normal" ? "Your private workspace is ready." : `No note selected in ${paneTitle}.`}</h2>
-            <p>{noteState === "normal" ? "Create a note to begin building your knowledge library." : "Choose a note from the list or return to Home."}</p>
-            {noteState === "normal" ? (
-              <button className="primary-button" type="button" onClick={handleCreateNote} disabled={busy}>
-                Create first note
-              </button>
-            ) : null}
-          </div>
+          <div className="empty-editor"><p className="eyebrow">GoreeCloud Notes</p><h2>{noteState === "normal" ? "Your private workspace is ready." : `No note selected in ${paneTitle}.`}</h2><p>{noteState === "normal" ? "Create a note to begin building your knowledge library." : "Choose a note from the list or return to Home."}</p>{noteState === "normal" ? <button className="primary-button" type="button" onClick={handleCreateNote} disabled={busy}>Create first note</button> : null}</div>
         )}
-
-        <footer className="source-footer">
-          <span>AGPL-3.0-only</span>
-          <span aria-hidden="true"> · </span>
-          <SourceLink />
-        </footer>
+        <footer className="source-footer"><span>AGPL-3.0-only</span><span aria-hidden="true"> · </span><SourceLink /></footer>
       </section>
     </main>
   );
