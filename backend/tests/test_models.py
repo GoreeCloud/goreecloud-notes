@@ -1,9 +1,10 @@
-"""Structural tests for the first native GoreeCloud Notes persistence model."""
+"""Structural tests for the native GoreeCloud Notes persistence model."""
 
 from sqlalchemy import CheckConstraint, UniqueConstraint
 
 from app import login_security, models  # noqa: F401
 from app.database import Base
+from app.migration import persistence  # noqa: F401
 
 
 def test_native_core_tables_are_registered() -> None:
@@ -11,6 +12,8 @@ def test_native_core_tables_are_registered() -> None:
         "attachments",
         "auth_sessions",
         "login_rate_buckets",
+        "migration_imports",
+        "migration_note_records",
         "note_revisions",
         "note_tags",
         "notebooks",
@@ -24,6 +27,8 @@ def test_native_core_tables_are_registered() -> None:
 def test_user_owned_entities_keep_explicit_owner_scope() -> None:
     for table_name in (
         "attachments",
+        "migration_imports",
+        "migration_note_records",
         "note_revisions",
         "note_tags",
         "notebooks",
@@ -59,6 +64,45 @@ def test_login_rate_state_keeps_only_opaque_bucket_signals() -> None:
     } == set(buckets.c.keys())
     for clear_identifier in ("username", "source", "ip", "ip_address", "account"):
         assert clear_identifier not in buckets.c
+
+
+def test_migration_provenance_keeps_source_fingerprints_and_exact_record() -> None:
+    imports = Base.metadata.tables["migration_imports"]
+    records = Base.metadata.tables["migration_note_records"]
+
+    assert {
+        "provider",
+        "source_export_sha256",
+        "manifest_sha256",
+        "evidence_sha256",
+        "source_exported_at",
+        "source_note_count",
+        "imported_note_count",
+        "conversion_profile",
+    }.issubset(imports.c.keys())
+    assert {
+        "import_id",
+        "note_id",
+        "source_name",
+        "source_uid",
+        "source_order",
+        "record_sha256",
+        "source_record",
+    }.issubset(records.c.keys())
+
+    import_unique_columns = {
+        tuple(column.name for column in constraint.columns)
+        for constraint in imports.constraints
+        if isinstance(constraint, UniqueConstraint)
+    }
+    record_unique_columns = {
+        tuple(column.name for column in constraint.columns)
+        for constraint in records.constraints
+        if isinstance(constraint, UniqueConstraint)
+    }
+    assert ("owner_id", "provider", "source_export_sha256") in import_unique_columns
+    assert ("import_id", "source_name") in record_unique_columns
+    assert ("import_id", "note_id") in record_unique_columns
 
 
 def test_note_state_is_native_not_hidden_content_metadata() -> None:
