@@ -140,14 +140,14 @@ function App() {
     : false;
 
   const visibleNotes = useMemo(() => {
-    const query = search.trim().casefold?.() ?? search.trim().toLowerCase();
+    const query = search.trim().toLowerCase();
     if (!query) {
       return notes;
     }
 
     return notes.filter((note) => {
       const haystack = `${note.title}\n${documentToText(note.document)}`.toLowerCase();
-      return haystack.includes(query.toLowerCase());
+      return haystack.includes(query);
     });
   }, [notes, search]);
 
