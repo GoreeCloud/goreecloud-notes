@@ -9,6 +9,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from .attachments import router as attachments_router
 from .auth import (
     AuthContext,
     authenticate_user,
@@ -155,4 +156,5 @@ def logout(
 
 
 api.include_router(workspace_router)
+api.include_router(attachments_router)
 app.include_router(api)
