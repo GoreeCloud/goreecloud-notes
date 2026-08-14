@@ -234,6 +234,90 @@ recovered_login_status=$(curl \
   "$base_url/auth/login")
 test "$recovered_login_status" = "200"
 
+# Administrative lifecycle status is non-sensitive and reflects the live session.
+docker compose exec -T api python -m app.cli account-status \
+  --username ' CI-USER ' \
+  --json > /tmp/goreecloud-notes-account-status-active.json
+grep -F '"isActive":true' /tmp/goreecloud-notes-account-status-active.json
+grep -F '"activeSessions":1' /tmp/goreecloud-notes-account-status-active.json
+
+# Disabling requires an explicit acknowledgement rather than a bare account name.
+if docker compose exec -T api python -m app.cli disable-user \
+  --username ci-user > /tmp/goreecloud-notes-disable-without-confirmation.txt 2>&1; then
+  echo "disable-user unexpectedly succeeded without --confirm-disable" >&2
+  exit 1
+fi
+grep -F -- '--confirm-disable' /tmp/goreecloud-notes-disable-without-confirmation.txt
+
+docker compose exec -T api python -m app.cli disable-user \
+  --username ci-user \
+  --confirm-disable > /tmp/goreecloud-notes-disable-confirmed.txt
+grep -F 'Disabled GoreeCloud Notes account: ci-user' /tmp/goreecloud-notes-disable-confirmed.txt
+grep -F 'revoked 1 session(s)' /tmp/goreecloud-notes-disable-confirmed.txt
+
+docker compose exec -T api python -m app.cli account-status \
+  --username ci-user \
+  --json > /tmp/goreecloud-notes-account-status-disabled.json
+grep -F '"isActive":false' /tmp/goreecloud-notes-account-status-disabled.json
+grep -F '"activeSessions":0' /tmp/goreecloud-notes-account-status-disabled.json
+
+disabled_session_status=$(curl \
+  --silent \
+  --show-error \
+  --cookie "$cookie_c" \
+  --output /dev/null \
+  --write-out '%{http_code}' \
+  "$base_url/auth/me")
+test "$disabled_session_status" = "401"
+
+disabled_login_status=$(curl \
+  --silent \
+  --show-error \
+  --output /tmp/goreecloud-notes-disabled-login.json \
+  --write-out '%{http_code}' \
+  --header 'Content-Type: application/json' \
+  --data "{\"username\":\"ci-user\",\"password\":\"$recovered_password\"}" \
+  "$base_url/auth/login")
+test "$disabled_login_status" = "401"
+grep -F '"detail":"invalid username or password"' /tmp/goreecloud-notes-disabled-login.json
+if grep -Eiq 'disabled|inactive|deactivated' /tmp/goreecloud-notes-disabled-login.json; then
+  echo "disabled-account login disclosed lifecycle state" >&2
+  exit 1
+fi
+
+docker compose exec -T api python -m app.cli enable-user \
+  --username ci-user > /tmp/goreecloud-notes-enable.txt
+grep -F 'Enabled GoreeCloud Notes account: ci-user' /tmp/goreecloud-notes-enable.txt
+grep -F 'fresh sign-in required' /tmp/goreecloud-notes-enable.txt
+
+docker compose exec -T api python -m app.cli account-status \
+  --username ci-user \
+  --json > /tmp/goreecloud-notes-account-status-reenabled.json
+grep -F '"isActive":true' /tmp/goreecloud-notes-account-status-reenabled.json
+grep -F '"activeSessions":0' /tmp/goreecloud-notes-account-status-reenabled.json
+
+# Re-enabling must not resurrect the pre-disable browser cookie.
+stale_after_reenable_status=$(curl \
+  --silent \
+  --show-error \
+  --cookie "$cookie_c" \
+  --output /dev/null \
+  --write-out '%{http_code}' \
+  "$base_url/auth/me")
+test "$stale_after_reenable_status" = "401"
+
+rm -f "$cookie_c"
+reenabled_login_status=$(curl \
+  --silent \
+  --show-error \
+  --cookie-jar "$cookie_c" \
+  --output /tmp/goreecloud-notes-login-reenabled.json \
+  --write-out '%{http_code}' \
+  --header 'Content-Type: application/json' \
+  --data "{\"username\":\"ci-user\",\"password\":\"$recovered_password\"}" \
+  "$base_url/auth/login")
+test "$reenabled_login_status" = "200"
+
 csrf_c=$(awk '$6 == "goreecloud_notes_csrf" { print $7 }' "$cookie_c")
 test -n "$csrf_c"
 
