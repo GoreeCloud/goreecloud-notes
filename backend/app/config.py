@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     api_prefix: str = Field(default="/api/v1")
     allowed_origins: str = Field(default="http://127.0.0.1:5173,http://localhost:5173")
     session_ttl_seconds: int = Field(default=43_200, ge=900, le=2_592_000)
+    revision_min_interval_seconds: int = Field(default=300, ge=30, le=86_400)
 
     database_host: str = Field(default="127.0.0.1")
     database_port: int = Field(default=5432)
