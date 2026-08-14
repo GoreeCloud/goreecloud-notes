@@ -8,11 +8,9 @@ import sys
 
 from sqlalchemy import select
 
-from .auth import hash_password, normalize_username
+from .auth import hash_password, normalize_username, replace_user_password, validate_password
 from .database import SessionLocal
 from .models import User, UserCredential
-
-_MIN_PASSWORD_LENGTH = 12
 
 
 def _read_password(password_stdin: bool) -> str:
@@ -24,8 +22,7 @@ def _read_password(password_stdin: bool) -> str:
         if password != confirmation:
             raise ValueError("Passwords do not match.")
 
-    if len(password) < _MIN_PASSWORD_LENGTH:
-        raise ValueError(f"Password must contain at least {_MIN_PASSWORD_LENGTH} characters.")
+    validate_password(password)
     return password
 
 
@@ -61,6 +58,26 @@ def create_user(*, username: str, display_name: str, password_stdin: bool) -> No
     print(f"Created GoreeCloud Notes account: {clean_username}")
 
 
+def reset_password(*, username: str, password_stdin: bool) -> None:
+    """Replace one account password and revoke all existing browser sessions."""
+
+    normalized = normalize_username(username)
+    if not normalized:
+        raise ValueError("Username must not be empty.")
+
+    password = _read_password(password_stdin)
+
+    with SessionLocal() as db:
+        user = db.scalar(select(User).where(User.username_normalized == normalized))
+        if user is None:
+            raise ValueError("Account not found.")
+
+        replace_user_password(db, user=user, new_password=password)
+        db.commit()
+
+    print(f"Reset GoreeCloud Notes password and revoked all sessions: {user.username}")
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="GoreeCloud Notes administrative commands")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -76,6 +93,17 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Read one password line from standard input instead of prompting interactively.",
     )
+
+    reset = subparsers.add_parser(
+        "reset-password",
+        help="Reset one private account password and revoke every existing browser session.",
+    )
+    reset.add_argument("--username", required=True)
+    reset.add_argument(
+        "--password-stdin",
+        action="store_true",
+        help="Read one replacement password line from standard input instead of prompting interactively.",
+    )
     return parser
 
 
@@ -88,6 +116,11 @@ def main() -> int:
             create_user(
                 username=args.username,
                 display_name=args.display_name,
+                password_stdin=args.password_stdin,
+            )
+        elif args.command == "reset-password":
+            reset_password(
+                username=args.username,
                 password_stdin=args.password_stdin,
             )
         else:
