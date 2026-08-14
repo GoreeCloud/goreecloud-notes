@@ -3,7 +3,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { ApiError, changePassword, getCurrentUser, type CurrentUser } from "./api";
 
 const MIN_PASSWORD_LENGTH = 12;
-const MAX_PASSWORD_LENGTH = 256;
+const MAX_PASSWORD_LENGTH = 1024;
 
 type AccountState = "checking" | "authenticated" | "unauthenticated" | "error";
 
@@ -194,7 +194,7 @@ export default function AccountSecurityPage() {
                 />
               </label>
               <p id="new-password-guidance" className="field-guidance">
-                Use at least {MIN_PASSWORD_LENGTH} characters. The server enforces the same minimum and rejects reuse of the current password.
+                Use {MIN_PASSWORD_LENGTH} to {MAX_PASSWORD_LENGTH} characters. The server enforces the same boundary and rejects reuse of the current password.
               </p>
 
               <label>
