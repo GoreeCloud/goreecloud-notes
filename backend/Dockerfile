@@ -8,12 +8,15 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-COPY pyproject.toml ./
+COPY pyproject.toml requirements.lock ./
 COPY app ./app
 COPY migrations ./migrations
 COPY alembic.ini ./
 
-RUN python -m pip install .
+# requirements.lock constrains the full runtime dependency graph. The project metadata
+# remains the declaration of direct requirements; image builds must satisfy both.
+RUN python -m pip install --constraint requirements.lock . \
+    && python -m pip check
 
 RUN useradd \
     --create-home \
