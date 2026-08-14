@@ -1,6 +1,14 @@
 import { FormEvent, useEffect, useState } from "react";
 
-import { ApiError, changePassword, getCurrentUser, type CurrentUser } from "./api";
+import {
+  ApiError,
+  changePassword,
+  getCurrentUser,
+  listBrowserSessions,
+  revokeOtherBrowserSessions,
+  type BrowserSession,
+  type CurrentUser,
+} from "./api";
 import { downloadLibraryExport, saveLibraryExport } from "./libraryExport";
 
 const MIN_PASSWORD_LENGTH = 12;
@@ -17,6 +25,15 @@ function returnToNotes(): void {
   window.location.hash = "";
 }
 
+function formatSessionTime(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Unknown";
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date);
+}
+
 export default function AccountSecurityPage() {
   const [accountState, setAccountState] = useState<AccountState>("checking");
   const [user, setUser] = useState<CurrentUser | null>(null);
@@ -26,6 +43,11 @@ export default function AccountSecurityPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
+  const [sessions, setSessions] = useState<BrowserSession[]>([]);
+  const [sessionsLoading, setSessionsLoading] = useState(false);
+  const [sessionsBusy, setSessionsBusy] = useState(false);
+  const [sessionsError, setSessionsError] = useState("");
+  const [sessionsSuccess, setSessionsSuccess] = useState("");
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState("");
   const [exportSuccess, setExportSuccess] = useState("");
@@ -37,6 +59,26 @@ export default function AccountSecurityPage() {
         if (!active) return;
         setUser(current);
         setAccountState("authenticated");
+        setSessionsLoading(true);
+        void listBrowserSessions()
+          .then((activeSessions) => {
+            if (!active) return;
+            setSessions(activeSessions);
+          })
+          .catch((loadError: unknown) => {
+            if (!active) return;
+            if (loadError instanceof ApiError && loadError.status === 401) {
+              setUser(null);
+              setSessions([]);
+              setError("Your session is no longer active. Sign in again to manage account security.");
+              setAccountState("unauthenticated");
+              return;
+            }
+            setSessionsError(accountErrorMessage(loadError));
+          })
+          .finally(() => {
+            if (active) setSessionsLoading(false);
+          });
       })
       .catch((loadError: unknown) => {
         if (!active) return;
@@ -56,6 +98,7 @@ export default function AccountSecurityPage() {
     setCurrentPassword("");
     setNewPassword("");
     setConfirmPassword("");
+    setSessions([]);
     setUser(null);
     setAccountState("unauthenticated");
     setError(message);
@@ -92,6 +135,7 @@ export default function AccountSecurityPage() {
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
+      setSessions([]);
       setUser(null);
       setSuccess(true);
       setAccountState("unauthenticated");
@@ -103,6 +147,32 @@ export default function AccountSecurityPage() {
       }
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function handleRevokeOtherSessions() {
+    if (sessionsBusy) return;
+
+    setSessionsError("");
+    setSessionsSuccess("");
+    setSessionsBusy(true);
+    try {
+      const result = await revokeOtherBrowserSessions();
+      const activeSessions = await listBrowserSessions();
+      setSessions(activeSessions);
+      setSessionsSuccess(
+        result.revoked === 0
+          ? "No other active browser sessions needed to be signed out."
+          : `Signed out ${result.revoked} other browser session${result.revoked === 1 ? "" : "s"}.`,
+      );
+    } catch (sessionFailure) {
+      if (sessionFailure instanceof ApiError && sessionFailure.status === 401) {
+        expireLocalAccountState("Your session is no longer active. Sign in again before managing browser sessions.");
+      } else {
+        setSessionsError(accountErrorMessage(sessionFailure));
+      }
+    } finally {
+      setSessionsBusy(false);
     }
   }
 
@@ -130,6 +200,8 @@ export default function AccountSecurityPage() {
       setExporting(false);
     }
   }
+
+  const otherSessionCount = sessions.filter((session) => !session.current).length;
 
   return (
     <main className="account-security-page">
@@ -190,6 +262,42 @@ export default function AccountSecurityPage() {
               </div>
             </div>
 
+            <section className="account-security-portability" aria-labelledby="browser-sessions-heading">
+              <div className="account-security-section-heading">
+                <h2 id="browser-sessions-heading">Browser sessions</h2>
+                <p>
+                  Review active server-side Notes sessions and sign out other browsers without ending this session.
+                </p>
+              </div>
+              <p className="field-guidance portability-guidance">
+                GoreeCloud Notes shows only session start and expiration times. This view does not require device fingerprinting, IP-history collection, or stored browser secrets.
+              </p>
+              {sessionsLoading ? <p className="field-guidance" role="status">Loading active sessions…</p> : null}
+              {!sessionsLoading && sessions.length === 0 ? (
+                <p className="field-guidance">No active session records are currently available.</p>
+              ) : null}
+              {sessions.map((session) => (
+                <div className="account-security-status" key={session.id}>
+                  <strong>{session.current ? "Current session" : "Other active session"}</strong>
+                  <span>
+                    Started {formatSessionTime(session.created_at)} · Expires {formatSessionTime(session.expires_at)}
+                  </span>
+                </div>
+              ))}
+              {sessionsError ? <p className="account-security-inline-error" role="alert">{sessionsError}</p> : null}
+              {sessionsSuccess ? <p className="account-security-export-success" role="status">{sessionsSuccess}</p> : null}
+              <div className="account-security-actions portability-actions">
+                <button
+                  className="secondary-button"
+                  type="button"
+                  onClick={() => void handleRevokeOtherSessions()}
+                  disabled={busy || exporting || sessionsBusy || sessionsLoading || otherSessionCount === 0}
+                >
+                  {sessionsBusy ? "Signing out other sessions…" : `Sign out other sessions${otherSessionCount > 0 ? ` (${otherSessionCount})` : ""}`}
+                </button>
+              </div>
+            </section>
+
             <form className="account-security-form" onSubmit={handleSubmit}>
               <div className="account-security-section-heading">
                 <h2>Change password</h2>
@@ -208,7 +316,7 @@ export default function AccountSecurityPage() {
                   minLength={1}
                   maxLength={MAX_PASSWORD_LENGTH}
                   required
-                  disabled={busy || exporting}
+                  disabled={busy || exporting || sessionsBusy}
                 />
               </label>
 
@@ -222,7 +330,7 @@ export default function AccountSecurityPage() {
                   minLength={MIN_PASSWORD_LENGTH}
                   maxLength={MAX_PASSWORD_LENGTH}
                   required
-                  disabled={busy || exporting}
+                  disabled={busy || exporting || sessionsBusy}
                   aria-describedby="new-password-guidance"
                 />
               </label>
@@ -240,7 +348,7 @@ export default function AccountSecurityPage() {
                   minLength={MIN_PASSWORD_LENGTH}
                   maxLength={MAX_PASSWORD_LENGTH}
                   required
-                  disabled={busy || exporting}
+                  disabled={busy || exporting || sessionsBusy}
                 />
               </label>
 
@@ -250,7 +358,7 @@ export default function AccountSecurityPage() {
                 <button
                   className="primary-button"
                   type="submit"
-                  disabled={busy || exporting || !currentPassword || !newPassword || !confirmPassword}
+                  disabled={busy || exporting || sessionsBusy || !currentPassword || !newPassword || !confirmPassword}
                 >
                   {busy ? "Changing password…" : "Change password"}
                 </button>
@@ -274,7 +382,7 @@ export default function AccountSecurityPage() {
                   className="primary-button"
                   type="button"
                   onClick={() => void handleLibraryExport()}
-                  disabled={busy || exporting}
+                  disabled={busy || exporting || sessionsBusy}
                 >
                   {exporting ? "Building verified export…" : "Download full library"}
                 </button>
