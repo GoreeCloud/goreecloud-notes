@@ -45,6 +45,8 @@ services:
         condition: service_healthy
     ports:
       - "127.0.0.1:${API_PORT:-8000}:8000"
+    volumes:
+      - attachment_data:/var/lib/goreecloud-notes/attachments
     networks:
       - backend
       - edge
@@ -69,6 +71,7 @@ secrets:
 
 volumes:
   postgres_data:
+  attachment_data:
 
 networks:
   backend:
