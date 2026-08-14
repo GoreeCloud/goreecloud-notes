@@ -158,6 +158,39 @@ def revoke_user_sessions(db: Session, *, user_id: UUID) -> None:
     db.execute(delete(AuthSession).where(AuthSession.user_id == user_id))
 
 
+def list_active_user_sessions(db: Session, context: AuthContext) -> list[AuthSession]:
+    """Return the account's unexpired sessions without exposing secret material."""
+
+    now = datetime.now(UTC)
+    return list(
+        db.scalars(
+            select(AuthSession)
+            .where(
+                AuthSession.user_id == context.user.id,
+                AuthSession.expires_at > now,
+            )
+            .order_by(AuthSession.created_at.desc(), AuthSession.id)
+        )
+    )
+
+
+def revoke_other_user_sessions(db: Session, context: AuthContext) -> int:
+    """Revoke every live session for the account except the authenticated one."""
+
+    other_sessions = list(
+        db.scalars(
+            select(AuthSession).where(
+                AuthSession.user_id == context.user.id,
+                AuthSession.id != context.session.id,
+            )
+        )
+    )
+    for session in other_sessions:
+        db.delete(session)
+    db.flush()
+    return len(other_sessions)
+
+
 def replace_user_password(db: Session, *, user: User, new_password: str) -> None:
     """Replace credential material and revoke every existing browser session.
 
