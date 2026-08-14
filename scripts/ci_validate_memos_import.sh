@@ -249,7 +249,8 @@ docker compose exec -T db sh -c 'PGPASSWORD="$(cat /run/secrets/postgres_passwor
 test "$(sed -n '1p' /tmp/goreecloud-notes-memos-import-provenance-counts.txt)" = "1"
 test "$(sed -n '2p' /tmp/goreecloud-notes-memos-import-provenance-counts.txt)" = "2"
 
-# Clean temporary migration inputs from the API container. Persisted imported target data
-# intentionally remains for the rest of this disposable CI stack and is destroyed at teardown.
-docker compose exec -T api rm -rf \
+# docker compose cp creates root-owned temp files even though the API runtime itself is
+# non-root. Root is used here only to remove CI-injected temporary inputs after all
+# validation. This does not change the application container's runtime UID or privileges.
+docker compose exec --user 0 -T api rm -rf \
   "$container_source" "$container_manifest" "$container_evidence" "$container_map" "$container_evidence_root"
