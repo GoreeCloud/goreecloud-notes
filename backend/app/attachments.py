@@ -18,24 +18,17 @@ from sqlalchemy.orm import Session
 from .auth import AuthContext, get_current_auth_context, require_csrf
 from .config import get_settings
 from .database import get_db
-from .models import Attachment, Note
+from .documents import SAFE_INLINE_IMAGE_MEDIA_TYPES, attachment_image_ids
+from .models import Attachment, Note, NoteRevision
 
 router = APIRouter(tags=["attachments"])
 settings = get_settings()
 
-# Milestone 0 previews intentionally allow only common raster image formats. Active
-# document formats such as SVG/HTML and generic browser-renderable files stay on the
-# ordinary download path until content-sanitization and production scanning policy are
+# Preview and inline-image rendering intentionally share one passive-raster allowlist.
+# Active document formats such as SVG/HTML and generic browser-renderable files stay on
+# the ordinary download path until content sanitization and production scanning policy are
 # separately approved.
-SAFE_IMAGE_PREVIEW_MEDIA_TYPES = frozenset(
-    {
-        "image/avif",
-        "image/gif",
-        "image/jpeg",
-        "image/png",
-        "image/webp",
-    }
-)
+SAFE_IMAGE_PREVIEW_MEDIA_TYPES = SAFE_INLINE_IMAGE_MEDIA_TYPES
 
 
 class AttachmentView(BaseModel):
@@ -109,6 +102,27 @@ def _require_attachment_path(attachment: Attachment) -> Path:
     if not path.is_file():
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="attachment bytes unavailable")
     return path
+
+
+def _attachment_is_referenced(db: Session, *, attachment: Attachment) -> bool:
+    """Fail closed when current content or retained immutable history still uses bytes."""
+
+    note = db.scalar(
+        select(Note).where(
+            Note.id == attachment.note_id,
+            Note.owner_id == attachment.owner_id,
+        )
+    )
+    if note is not None and attachment.id in attachment_image_ids(note.document):
+        return True
+
+    revision_documents = db.scalars(
+        select(NoteRevision.document).where(
+            NoteRevision.note_id == attachment.note_id,
+            NoteRevision.owner_id == attachment.owner_id,
+        )
+    )
+    return any(attachment.id in attachment_image_ids(document) for document in revision_documents)
 
 
 @router.get("/notes/{note_id}/attachments", response_model=list[AttachmentView])
@@ -272,9 +286,20 @@ def delete_attachment(
     db: Session = Depends(get_db),
     context: AuthContext = Depends(require_csrf),
 ) -> Response:
-    """Delete owner-authorized attachment bytes and metadata."""
+    """Delete unreferenced owner-authorized attachment bytes and metadata.
+
+    Inline image references are durable document data. Milestone 0 therefore refuses to
+    remove bytes while the current note or retained immutable revision history still points
+    at them; revision-retention policy must be resolved before those bytes can be reclaimed.
+    """
 
     attachment = _require_owned_attachment(db, owner_id=context.user.id, attachment_id=attachment_id)
+    if _attachment_is_referenced(db, attachment=attachment):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="attachment is referenced by note content or retained revision history",
+        )
+
     path = _storage_path(attachment.storage_key)
     try:
         path.unlink(missing_ok=True)
