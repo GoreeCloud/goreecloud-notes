@@ -41,6 +41,7 @@ export type Note = {
   title: string;
   document: NoteDocument;
   document_schema: number;
+  content_version: number;
   state: NoteState;
   is_pinned: boolean;
   color: string | null;
@@ -57,7 +58,9 @@ export type NoteListOptions = {
 
 export type NotePatch = Partial<
   Pick<Note, "title" | "document" | "notebook_id" | "state" | "is_pinned" | "color">
->;
+> & {
+  expected_content_version?: number;
+};
 
 export class ApiError extends Error {
   readonly status: number;
