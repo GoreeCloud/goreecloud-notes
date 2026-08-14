@@ -85,7 +85,7 @@ cmp "$source_file" "$download_file"
 # The preview endpoint rejects generic/active document types rather than rendering them inline.
 test "$(status_of --cookie "$owner_cookies" "$base_url/attachments/$attachment_id/preview")" = "415"
 
-# Upload a known tiny PNG and prove owner-scoped inline raster preview behavior.
+# Upload a known tiny PNG and prove owner-scoped raster preview behavior.
 python - "$image_file" <<'PY'
 import base64, sys
 # 1x1 transparent PNG.
@@ -116,9 +116,118 @@ grep -i -F 'cache-control: private, no-store' "$preview_headers"
 grep -i -F 'cross-origin-resource-policy: same-origin' "$preview_headers"
 grep -i -F 'x-content-type-options: nosniff' "$preview_headers"
 
+# Upload a second PNG that will become durable note content through an attachment-ID block.
+curl --fail --silent --show-error --cookie "$owner_cookies" \
+  --header "X-CSRF-Token: $owner_csrf" \
+  --header 'Content-Type: image/png' \
+  --data-binary "@$image_file" \
+  "$base_url/notes/$note_id/attachments?filename=embedded.png" > /tmp/embedded-attachment.json
+embedded_attachment_id=$(json_field /tmp/embedded-attachment.json id)
+
+python - "$embedded_attachment_id" <<'PY' > /tmp/embed-note-patch.json
+import json, sys
+json.dump({
+    'document': {
+        'format': 'goreecloud.blocks',
+        'version': 1,
+        'blocks': [
+            {
+                'type': 'paragraph',
+                'content': [{'type': 'text', 'text': 'Embedded image follows.'}],
+            },
+            {
+                'type': 'attachmentImage',
+                'attachment_id': sys.argv[1],
+                'alt': 'Embedded validation image',
+            },
+        ],
+    },
+    'expected_content_version': 1,
+}, sys.stdout)
+PY
+
+curl --fail --silent --show-error --cookie "$owner_cookies" \
+  --request PATCH \
+  --header "X-CSRF-Token: $owner_csrf" \
+  --header 'Content-Type: application/json' \
+  --data-binary @/tmp/embed-note-patch.json \
+  "$base_url/notes/$note_id" > /tmp/embedded-note.json
+
+test "$(json_field /tmp/embedded-note.json content_version)" = "2"
+python - "$embedded_attachment_id" <<'PY'
+import json, sys
+with open('/tmp/embedded-note.json', encoding='utf-8') as handle:
+    note = json.load(handle)
+blocks = note['document']['blocks']
+assert blocks[1] == {
+    'type': 'attachmentImage',
+    'attachment_id': sys.argv[1],
+    'alt': 'Embedded validation image',
+}
+PY
+
+# Inline image references must resolve to an approved raster attachment on the same owned note.
+python - "$attachment_id" <<'PY' > /tmp/text-inline-patch.json
+import json, sys
+json.dump({
+    'document': {
+        'format': 'goreecloud.blocks',
+        'version': 1,
+        'blocks': [{'type': 'attachmentImage', 'attachment_id': sys.argv[1], 'alt': 'Not an image'}],
+    },
+    'expected_content_version': 2,
+}, sys.stdout)
+PY
+test "$(status_of --cookie "$owner_cookies" --request PATCH \
+  --header "X-CSRF-Token: $owner_csrf" --header 'Content-Type: application/json' \
+  --data-binary @/tmp/text-inline-patch.json "$base_url/notes/$note_id")" = "422"
+
+python - <<'PY' > /tmp/missing-inline-patch.json
+import json, uuid
+json.dump({
+    'document': {
+        'format': 'goreecloud.blocks',
+        'version': 1,
+        'blocks': [{'type': 'attachmentImage', 'attachment_id': str(uuid.uuid4()), 'alt': 'Missing'}],
+    },
+    'expected_content_version': 2,
+}, __import__('sys').stdout)
+PY
+test "$(status_of --cookie "$owner_cookies" --request PATCH \
+  --header "X-CSRF-Token: $owner_csrf" --header 'Content-Type: application/json' \
+  --data-binary @/tmp/missing-inline-patch.json "$base_url/notes/$note_id")" = "422"
+
+# Unsupported document versions, nodes, and arbitrary external-image shapes fail closed.
+cat > /tmp/future-document-patch.json <<'JSON'
+{"document":{"format":"goreecloud.blocks","version":2,"blocks":[]},"expected_content_version":2}
+JSON
+test "$(status_of --cookie "$owner_cookies" --request PATCH \
+  --header "X-CSRF-Token: $owner_csrf" --header 'Content-Type: application/json' \
+  --data-binary @/tmp/future-document-patch.json "$base_url/notes/$note_id")" = "422"
+
+cat > /tmp/unsupported-node-patch.json <<'JSON'
+{"document":{"format":"goreecloud.blocks","version":1,"blocks":[{"type":"script","src":"https://example.invalid/unsafe.js"}]},"expected_content_version":2}
+JSON
+test "$(status_of --cookie "$owner_cookies" --request PATCH \
+  --header "X-CSRF-Token: $owner_csrf" --header 'Content-Type: application/json' \
+  --data-binary @/tmp/unsupported-node-patch.json "$base_url/notes/$note_id")" = "422"
+
+cat > /tmp/arbitrary-image-patch.json <<'JSON'
+{"document":{"format":"goreecloud.blocks","version":1,"blocks":[{"type":"attachmentImage","attachment_id":"https://example.invalid/image.png","alt":"External"}]},"expected_content_version":2}
+JSON
+test "$(status_of --cookie "$owner_cookies" --request PATCH \
+  --header "X-CSRF-Token: $owner_csrf" --header 'Content-Type: application/json' \
+  --data-binary @/tmp/arbitrary-image-patch.json "$base_url/notes/$note_id")" = "422"
+
+# A referenced image is content data: deleting its bytes is conflict-protected.
+test "$(status_of --cookie "$owner_cookies" --header "X-CSRF-Token: $owner_csrf" \
+  --request DELETE "$base_url/attachments/$embedded_attachment_id")" = "409"
+test "$(status_of --cookie "$owner_cookies" "$base_url/attachments/$embedded_attachment_id/preview")" = "200"
+
 # Owner isolation must make another user's note, download, and preview identifiers opaque.
 test "$(status_of --cookie "$other_cookies" "$base_url/attachments/$attachment_id")" = "404"
 test "$(status_of --cookie "$other_cookies" "$base_url/attachments/$image_attachment_id/preview")" = "404"
+test "$(status_of --cookie "$other_cookies" "$base_url/attachments/$embedded_attachment_id/preview")" = "404"
 test "$(status_of --cookie "$other_cookies" "$base_url/notes/$note_id/attachments")" = "404"
 test "$(status_of --cookie "$other_cookies" --header "X-CSRF-Token: $other_csrf" \
   --header 'Content-Type: text/plain' --data-binary "@$source_file" \
@@ -132,13 +241,15 @@ test "$(status_of --cookie "$owner_cookies" --header "X-CSRF-Token: $owner_csrf"
 # Mutation requires CSRF and persisted bytes are owned by the non-root API account.
 test "$(status_of --cookie "$owner_cookies" --request DELETE "$base_url/attachments/$attachment_id")" = "403"
 docker compose exec -T api sh -c \
-  'test "$(find /var/lib/goreecloud-notes/attachments -type f -user goreecloud | wc -l)" -ge 2'
+  'test "$(find /var/lib/goreecloud-notes/attachments -type f -user goreecloud | wc -l)" -ge 3'
 
+# Unreferenced files remain deletable; the embedded image remains retained by the note.
 test "$(status_of --cookie "$owner_cookies" --header "X-CSRF-Token: $owner_csrf" \
   --request DELETE "$base_url/attachments/$attachment_id")" = "204"
 test "$(status_of --cookie "$owner_cookies" --header "X-CSRF-Token: $owner_csrf" \
   --request DELETE "$base_url/attachments/$image_attachment_id")" = "204"
 test "$(status_of --cookie "$owner_cookies" "$base_url/attachments/$attachment_id")" = "404"
 test "$(status_of --cookie "$owner_cookies" "$base_url/attachments/$image_attachment_id/preview")" = "404"
+test "$(status_of --cookie "$owner_cookies" "$base_url/attachments/$embedded_attachment_id/preview")" = "200"
 docker compose exec -T api sh -c \
-  'test "$(find /var/lib/goreecloud-notes/attachments -type f | wc -l)" -eq 0'
+  'test "$(find /var/lib/goreecloud-notes/attachments -type f | wc -l)" -eq 1'
