@@ -5,6 +5,7 @@ base_url="http://127.0.0.1:8000/api/v1"
 password='ci-only-rate-password-13579'
 cookie_file="/tmp/goreecloud-notes-rate-cookies.txt"
 headers_file="/tmp/goreecloud-notes-rate-headers.txt"
+normalized_headers_file="/tmp/goreecloud-notes-rate-headers-normalized.txt"
 
 clear_rate_state() {
   docker compose exec -T db sh -c \
@@ -14,7 +15,7 @@ clear_rate_state() {
 
 cleanup() {
   clear_rate_state || true
-  rm -f "$cookie_file" "$headers_file"
+  rm -f "$cookie_file" "$headers_file" "$normalized_headers_file"
 }
 trap cleanup EXIT
 
@@ -53,8 +54,9 @@ third_status=$(curl \
   --data '{"username":"rate-user","password":"definitely-wrong-password"}' \
   "$base_url/auth/login")
 test "$third_status" = "429"
-grep -Eiq '^retry-after: [1-9][0-9]*\r?$' "$headers_file"
-grep -Eiq '^cache-control: no-store\r?$' "$headers_file"
+tr -d '\r' < "$headers_file" > "$normalized_headers_file"
+grep -Eiq '^retry-after: [1-9][0-9]*$' "$normalized_headers_file"
+grep -Eiq '^cache-control: no-store$' "$normalized_headers_file"
 
 # A correct password cannot bypass an active cooldown.
 immediate_correct=$(curl \
