@@ -6,7 +6,7 @@ GoreeCloud Notes is a privacy-first, self-hosted note-taking, knowledge-manageme
 
 **Milestone 0 — Native Foundation is in active development. Production deployment is not approved.**
 
-Draft PR #1 on `feature/native-foundation` contains the current native foundation. The application already has authenticated PostgreSQL-backed note persistence, owner isolation, nested notebook and tag organization, rich structured editing, conflict-safe explicit saves, immutable revision recovery, private attachments with safe raster previews and attachment-ID inline images, read-only attachment-store integrity auditing, indexed PostgreSQL full-text search, note lifecycle controls, a Glaze UI Account & Security workflow with privacy-preserving active-session review and selective other-session revocation, verified full-library native export through both browser and administrative CLI paths, verified empty-target native portable re-import, a controlled disposable Memos-to-native persistence pipeline with preserved migration provenance, and committed frontend/backend dependency-locking controls. Those implemented capabilities remain development-stage until the remaining production, protected-source migration, backup/recovery, publication, and security gates are closed.
+Draft PR #1 on `feature/native-foundation` contains the current native foundation. The application already has authenticated PostgreSQL-backed note persistence, owner isolation, nested notebook and tag organization, rich structured editing, conflict-safe explicit saves, immutable revision recovery, private attachments with safe raster previews and attachment-ID inline images, read-only attachment-store integrity auditing, indexed PostgreSQL full-text search, note lifecycle controls, a Glaze UI Account & Security workflow with privacy-preserving active-session review and selective other-session revocation, verified full-library native export through both browser and administrative CLI paths, verified empty-target native portable re-import, a controlled disposable Memos-to-native persistence pipeline with preserved migration provenance, committed frontend/backend dependency-locking controls, and a fail-closed production runtime preflight for browser origins, trusted-proxy configuration, file-backed database secrets, persistent attachment storage, and dependency readiness. Those implemented capabilities remain development-stage until the remaining target-environment production, protected-source migration, backup/recovery, publication, and security gates are closed.
 
 The native repository is independent from the transitional Memos-based GoreeCloud Notes implementation. `GoreeCloud/memos` remains preserved as a migration source, historical engineering record, and visual reference for the accepted Quick Notes experience until migration and replacement validation are complete.
 
@@ -62,10 +62,10 @@ goreecloud-notes/
 ├── frontend/                 # React/TypeScript/Vite web application
 ├── backend/                  # FastAPI application, lockfile, migrations, and tests
 ├── docker/                   # Container/deployment support
-├── docs/                     # Architecture, attachment, recovery, development, migration, and portability records
+├── docs/                     # Architecture, attachment, recovery, development, migration, and production-readiness records
 ├── tests/                    # Cross-component and future end-to-end tests
 ├── scripts/                  # Versioned live integration validation
-├── .github/workflows/        # Continuous integration
+├── .github/workflows/        # Continuous integration and source-level production preflight
 ├── .env.example              # Sanitized development configuration template
 ├── compose.yml               # Development Compose stack
 ├── CONTRIBUTING.md
@@ -79,7 +79,7 @@ goreecloud-notes/
 - Do not use production personal/family notes as a convenient development dataset.
 - Do not modify or delete the transitional Memos database or attachments merely because native development has started.
 - Do not publish backend ports directly to the public internet.
-- Do not treat a development container, migration, green CI run, or draft pull request as production approval.
+- Do not treat a development container, migration, green CI run, static production preflight, or draft pull request as production approval.
 - Preserve data portability, migration traceability, backup requirements, and rollback capability throughout development.
 - Do not allow arbitrary external URLs to bypass the owner-scoped attachment and inline-image model.
 - Do not hard-delete recoverable note/revision/attachment dependencies before retention and recovery policy is approved.
@@ -112,13 +112,17 @@ Implemented foundation work includes:
 - Explicit empty-target native Memos persistence import using only validated manifest/evidence inputs, generated native attachment storage, persistent source provenance, post-import read-only verification, duplicate-import refusal, and cross-user opacity.
 - Native portable export of imported accounts preserves exact migration import checkpoints and normalized source records so deferred source semantics remain portable instead of becoming database-only history.
 - Provenance-bearing destructive round-trip validation proving Memos source Markdown, relations, named source color, location metadata, Trash restore target, migration fingerprints/record hashes, note-tag relationships, and attachment bytes survive native export → destructive native-source removal → native re-import → Memos post-import verification → second native export.
-- Backend unit tests plus live Compose validation for authentication and session controls, workspace, organization, search, revisions, attachments, attachment-store integrity auditing, CLI/browser portability, native portable re-import, Memos migration/provenance, and destructive disposable database-plus-attachment recovery.
+- Production mode rejects unsafe development carryover: non-HTTPS/localhost/loopback or wildcard credentialed origins, an unresolved trusted-proxy boundary, relative attachment storage, and inline/relative database-secret configuration.
+- `python -m app.production_check` provides a non-destructive static production preflight for secure cookies, HTTPS origins, trusted proxy configuration, file-backed database-secret readiness, and attachment-root readiness while explicitly reporting that live dependency validation and production approval were not performed.
+- `/health` remains dependency-free liveness, while `/ready` requires both a live PostgreSQL query and usable attachment storage. Dockerfile/Compose health checks use `/ready` so persistence failure is not reported as a healthy application merely because the API process is running.
+- A dedicated **Production Runtime Preflight** GitHub Actions workflow proves both a passing explicit synthetic production configuration and fail-closed rejection of unsafe production defaults without claiming target-environment acceptance.
+- Backend unit tests plus live Compose validation for authentication and session controls, workspace, organization, search, revisions, attachments, attachment-store integrity auditing, CLI/browser portability, native portable re-import, Memos migration/provenance, destructive disposable database-plus-attachment recovery, and dependency readiness.
 
 The current synthetic migration gate deliberately does not claim complete native semantic equivalence. Exact source Markdown, relations, location metadata, Trash restore targets, and named Memos colors remain preserved in migration provenance when the current native projection does not have an approved equivalent. External-link attachments remain unsupported by the native Memos importer and therefore fail closed.
 
-Milestone 0 remains open for broader production account/recovery lifecycle controls, PDF/document/SVG preview policy, malware scanning, resumable/large-object and final production storage design, attachment quotas and scheduled integrity-audit/alerting policy, protected-copy Memos attachment extraction and a production-representative migration rehearsal, production Kopia/retention/off-site recovery evidence, selected RPO/RTO, and production-publication/monitoring/trusted-proxy review. Scheduled/encrypted export UX and production large-library/background-job/concurrency policy remain open. Native portable re-import is currently administrator-operated and empty-target only; browser upload/import, populated-library merge/conflict resolution, selective restore, and synchronization are not implemented.
+Milestone 0 remains open for broader production account/recovery lifecycle controls, PDF/document/SVG preview policy, malware scanning, resumable/large-object and final production storage design, attachment quotas and scheduled integrity-audit/alerting policy, protected-copy Memos attachment extraction and a production-representative migration rehearsal, production Kopia/retention/off-site recovery evidence, selected RPO/RTO, and target-environment production publication/monitoring/Caddy/trusted-proxy validation. Scheduled/encrypted export UX and production large-library/background-job/concurrency policy remain open. Native portable re-import is currently administrator-operated and empty-target only; browser upload/import, populated-library merge/conflict resolution, selective restore, and synchronization are not implemented.
 
-See `docs/architecture.md`, `docs/account-security.md`, `docs/attachments.md`, `docs/attachment-integrity.md`, `docs/revisions.md`, `docs/migration.md`, `docs/portable-export.md`, `docs/native-import.md`, and `docs/backup-restore.md` for the current technical boundaries.
+See `docs/architecture.md`, `docs/account-security.md`, `docs/attachments.md`, `docs/attachment-integrity.md`, `docs/revisions.md`, `docs/migration.md`, `docs/portable-export.md`, `docs/native-import.md`, `docs/backup-restore.md`, and `docs/production-readiness.md` for the current technical boundaries.
 
 ## Branch Model
 
