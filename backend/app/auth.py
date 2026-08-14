@@ -152,10 +152,30 @@ def verify_user_password(db: Session, *, user: User, password: str) -> bool:
     return credential is not None and verify_password(password, credential.password_hash)
 
 
-def revoke_user_sessions(db: Session, *, user_id: UUID) -> None:
-    """Revoke every server-side browser session for one account."""
+def revoke_user_sessions(db: Session, *, user_id: UUID) -> int:
+    """Revoke every server-side browser session for one account and return the deleted count."""
 
-    db.execute(delete(AuthSession).where(AuthSession.user_id == user_id))
+    result = db.execute(delete(AuthSession).where(AuthSession.user_id == user_id))
+    return max(int(result.rowcount or 0), 0)
+
+
+def set_user_active_state(db: Session, *, user: User, is_active: bool) -> tuple[bool, int]:
+    """Change account login eligibility while guaranteeing a fresh-session boundary.
+
+    Both disabling and re-enabling revoke every stored browser session. Disabling
+    therefore invalidates active access immediately after commit, while enabling
+    cannot accidentally resurrect a still-unexpired session that predates the
+    administrative lifecycle change.
+
+    The caller owns the transaction boundary. Account data and credential hashes
+    are deliberately preserved.
+    """
+
+    changed = bool(user.is_active) != is_active
+    user.is_active = is_active
+    revoked_sessions = revoke_user_sessions(db, user_id=user.id)
+    db.flush()
+    return changed, revoked_sessions
 
 
 def list_active_user_sessions(db: Session, context: AuthContext) -> list[AuthSession]:
