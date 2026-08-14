@@ -1,6 +1,6 @@
 # Account Security and Credential Recovery
 
-GoreeCloud Notes keeps account identity, password credentials, browser sessions, temporary login-abuse state, and portable user-data export concerns separate. This document records the Milestone 0 password-rotation, browser-session management, administrative-recovery, bounded login-protection, and Account & Security browser behavior implemented on the native development branch.
+GoreeCloud Notes keeps account identity, password credentials, browser sessions, temporary login-abuse state, portable user-data export concerns, and administrative account lifecycle state separate. This document records the Milestone 0 password-rotation, browser-session management, administrative-recovery, account disable/re-enable, bounded login-protection, and Account & Security browser behavior implemented on the native development branch.
 
 ## Password Policy
 
@@ -92,6 +92,41 @@ The command:
 
 The command does not create an administrator API, recovery token, email dependency, or permanent bootstrap credential.
 
+## Administrative Account Lifecycle
+
+Private accounts can now be suspended and restored without deleting credentials or user data. These operations remain local administrative CLI actions; there is no public or browser-facing endpoint that accepts an arbitrary account ID.
+
+Non-sensitive lifecycle state can be reviewed with:
+
+```bash
+python -m app.cli account-status --username <username>
+python -m app.cli account-status --username <username> --json
+```
+
+The status command reports only the account username, display name, active/inactive state, and count of unexpired browser sessions. It does not expose credential hashes, session tokens or digests, CSRF material, login-rate keys, note content, attachment paths, or other private account data.
+
+Disabling an account requires an explicit acknowledgement:
+
+```bash
+python -m app.cli disable-user \
+  --username <username> \
+  --confirm-disable
+```
+
+The command changes `users.is_active` to false and revokes every stored browser session for the account in the same transaction. Existing browser cookies therefore stop authenticating after commit. The account's password hash, notes, notebooks, tags, revisions, attachments, migration provenance, and portability data remain intact.
+
+A disabled account cannot create a new browser session even with the correct password. The login endpoint deliberately returns the same generic `401` response used for an invalid username or password; it does not disclose that the account exists or has been disabled. Password verification cost is still paid for the known account before the active-state check is returned, preserving the existing generic authentication path.
+
+Re-enabling is performed with:
+
+```bash
+python -m app.cli enable-user --username <username>
+```
+
+Re-enabling preserves the existing credential but also revokes any stored sessions before setting the account active. This is deliberate: a still-unexpired cookie that predates an administrative suspension must never become valid again merely because the account was re-enabled. A fresh sign-in is always required after reactivation.
+
+These controls are suspension/reinstatement, not account deletion. Permanent account deletion, content destruction, or automated retention cleanup remain outside this lifecycle boundary.
+
 ## Bounded Login-Abuse Controls
 
 The login endpoint maintains short-lived PostgreSQL rate state for two independent scopes:
@@ -133,6 +168,14 @@ The live Compose authentication/security gates must prove all of the following b
 - administrative CLI reset revokes the newly authenticated session;
 - the pre-reset password no longer authenticates;
 - the recovered password authenticates;
+- `account-status` reports the active account and its live session count without secret data;
+- `disable-user` without `--confirm-disable` fails closed;
+- confirmed disable changes the account to inactive and removes every active session;
+- the pre-disable browser cookie is rejected immediately;
+- a disabled account presented with its correct password receives the same generic invalid-credential response rather than a lifecycle-state disclosure;
+- `enable-user` restores login eligibility without changing the password;
+- re-enabling does not resurrect a pre-disable browser cookie;
+- a fresh sign-in succeeds after re-enable;
 - normal CSRF-protected logout and post-logout revocation still work afterward;
 - source+account failures remain generic until the configured threshold, then produce bounded HTTP `429` with `Retry-After`;
 - a correct password cannot bypass an active cooldown;
@@ -146,6 +189,6 @@ The live Compose authentication/security gates must prove all of the following b
 
 ## Remaining Production Security Gates
 
-This Milestone 0 work does **not** make the authentication system production-ready by itself. Remaining work includes production publication-layer abuse controls, broader final administrator/account lifecycle controls, monitoring and audit requirements, final deployment/session lifetime policy, backup/restore handling for credential/session/rate state, and private-publication validation.
+The implemented source boundary now covers private account creation, credential recovery, password rotation, session review/revocation, and administrative account suspension/reinstatement. This still does **not** make the authentication system production-ready by itself. Remaining work includes production publication-layer abuse controls, final operator authorization/runbook acceptance, monitoring and audit requirements, final deployment/session lifetime policy, backup/restore handling for credential/session/rate state, and private-publication validation.
 
 Any future self-service recovery mechanism must be designed separately. It must not silently add email, SMS, hosted identity, or third-party recovery dependencies to the GoreeCloud Notes core product.
