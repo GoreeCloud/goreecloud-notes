@@ -1,9 +1,12 @@
 """FastAPI entry point for native GoreeCloud Notes."""
 
-from fastapi import APIRouter, FastAPI
+from fastapi import APIRouter, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 
 from .config import get_settings
+from .database import engine
 
 settings = get_settings()
 
@@ -27,9 +30,30 @@ api = APIRouter(prefix=settings.api_prefix)
 
 @app.get("/health", tags=["system"])
 def health() -> dict[str, str]:
-    """Return a non-sensitive process health response."""
+    """Return a dependency-free, non-sensitive process liveness response."""
 
     return {"status": "ok", "service": "goreecloud-notes-api"}
+
+
+@app.get("/ready", tags=["system"])
+def readiness() -> dict[str, str]:
+    """Report readiness only when PostgreSQL accepts a real query.
+
+    The response intentionally exposes no database host, credential, schema, or
+    exception detail. Liveness remains available separately at ``/health`` so
+    dependency failure can be distinguished from process failure.
+    """
+
+    try:
+        with engine.connect() as connection:
+            result = connection.execute(text("SELECT 1")).scalar_one()
+    except SQLAlchemyError:
+        raise HTTPException(status_code=503, detail="service unavailable") from None
+
+    if result != 1:
+        raise HTTPException(status_code=503, detail="service unavailable")
+
+    return {"status": "ready", "service": "goreecloud-notes-api"}
 
 
 @api.get("/meta", tags=["system"])
