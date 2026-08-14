@@ -18,12 +18,12 @@ from .evidence import DEFAULT_MAX_MANIFEST_BYTES, serialize_evidence, verify_att
 from .importer import (
     DEFAULT_MAX_INPUT_BYTES,
     MigrationImportError,
-    import_memos_manifest,
     serialize_import_result,
     verify_imported_memos_data,
 )
 from .manifest import build_memos_manifest, serialize_manifest
 from .memos import DEFAULT_MAX_EXPORT_BYTES, format_text_report, inspect_memos_export
+from .target_import import import_memos_manifest
 
 
 def _add_export_arguments(parser: argparse.ArgumentParser) -> None:
