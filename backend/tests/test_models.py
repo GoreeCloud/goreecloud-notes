@@ -57,6 +57,35 @@ def test_note_state_is_native_not_hidden_content_metadata() -> None:
     assert "state" not in notes.c.document.name
 
 
+def test_notes_and_revisions_track_positive_content_versions() -> None:
+    notes = Base.metadata.tables["notes"]
+    revisions = Base.metadata.tables["note_revisions"]
+
+    assert notes.c.content_version.nullable is False
+    assert notes.c.content_version.server_default is not None
+    assert revisions.c.content_version.nullable is False
+
+    note_checks = {
+        str(constraint.sqltext)
+        for constraint in notes.constraints
+        if isinstance(constraint, CheckConstraint)
+    }
+    revision_checks = {
+        str(constraint.sqltext)
+        for constraint in revisions.constraints
+        if isinstance(constraint, CheckConstraint)
+    }
+    assert "content_version > 0" in note_checks
+    assert "content_version > 0" in revision_checks
+
+    revision_unique_columns = {
+        tuple(column.name for column in constraint.columns)
+        for constraint in revisions.constraints
+        if isinstance(constraint, UniqueConstraint)
+    }
+    assert ("note_id", "content_version") in revision_unique_columns
+
+
 def test_attachment_table_stores_metadata_not_binary_payloads() -> None:
     attachments = Base.metadata.tables["attachments"]
 
@@ -89,4 +118,10 @@ def test_revisions_are_immutable_content_snapshots() -> None:
 
     assert "created_at" in revisions.c
     assert "updated_at" not in revisions.c
-    assert {"revision_number", "title", "document", "document_schema"}.issubset(revisions.c.keys())
+    assert {
+        "revision_number",
+        "content_version",
+        "title",
+        "document",
+        "document_schema",
+    }.issubset(revisions.c.keys())
