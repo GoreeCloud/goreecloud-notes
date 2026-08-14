@@ -12,13 +12,20 @@ The initial local development workflow expects:
 
 ## Backend
 
+Create an isolated environment and install the project through the reviewed runtime/test dependency lock:
+
 ```bash
 cd backend
 python -m venv .venv
 source .venv/bin/activate
-python -m pip install -e '.[test]'
+python -m pip install --constraint requirements.lock -e '.[test]'
+python -m pip check
 uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
+
+`pyproject.toml` remains the declaration of direct project requirements. `requirements.lock` constrains the complete resolved runtime/test dependency graph used by CI. The build backend is separately pinned in `[build-system]` so editable/package builds do not silently select a different Setuptools release within a range.
+
+When intentionally changing a backend dependency, update the project declaration where applicable, resolve and review the full Python 3.13 dependency graph, update `requirements.lock`, run `python -m pip check`, run all backend tests, build the API image with the same constraints, and require a clean full CI run. Normal CI and Docker builds must not rewrite the lock automatically.
 
 The default API address is `http://127.0.0.1:8000`.
 
@@ -27,6 +34,7 @@ Validation:
 ```bash
 pytest
 python -m compileall -q app migrations
+python -m pip check
 ```
 
 `/health` is the dependency-free liveness endpoint. `/ready` is the database-backed readiness endpoint and succeeds only after the API can execute a real PostgreSQL query. The readiness response is deliberately non-sensitive and does not expose database connection details.
@@ -78,6 +86,8 @@ curl --fail http://127.0.0.1:8000/ready
 curl --fail http://127.0.0.1:8000/api/v1/meta
 ```
 
+The API image copies `requirements.lock`, installs the package with `--constraint requirements.lock`, and runs `python -m pip check` during the image build. This keeps the container's runtime dependency graph aligned with the reviewed lock rather than resolving new transitive versions on every rebuild.
+
 The readiness check validates more than process startup: it requires the non-root API process to load its file-backed database credential and complete a real PostgreSQL query.
 
 No production service publication is authorized by these commands. The API host port is bound to loopback only and PostgreSQL has no published host port.
@@ -115,7 +125,7 @@ Logout revokes the server-side session rather than merely deleting a browser coo
 
 ## Native Workspace API
 
-The authenticated persistence boundary now includes note lifecycle, notebook hierarchy, tags, and note/tag assignment.
+The authenticated persistence boundary includes note lifecycle, notebook hierarchy, tags, note/tag assignment, revisions, attachments, and indexed search.
 
 Notebook routes:
 
@@ -147,42 +157,25 @@ Note routes:
 - `PUT /api/v1/notes/{note_id}/tags/{tag_id}`
 - `DELETE /api/v1/notes/{note_id}/tags/{tag_id}`
 
-`GET /api/v1/notes` supports state, notebook, tag, and basic title-query filtering. Notebook/tag filters are authorization-checked before they are applied. The current title query is foundation behavior, not the final PostgreSQL full-text-search implementation.
+Every query and mutation is explicitly scoped to the authenticated user. A request for another user's note, notebook, tag, or attachment receives the same not-found behavior as an unknown identifier. Ordinary note deletion moves the note to recoverable Trash rather than hard-deleting it. Notes can also be pinned, archived, and restored through the native state fields.
 
-Every query and mutation is explicitly scoped to the authenticated user. A request for another user's note, notebook, or tag receives the same not-found behavior as an unknown identifier. Ordinary note deletion moves the note to recoverable Trash rather than hard-deleting it. Notes can also be pinned, archived, and restored through the native state fields.
-
-The current editor bridge stores an application-owned structured document envelope named `goreecloud.blocks`. This is intentionally independent of a final rich-text editor library. Title/document edits create immutable pre-change revision snapshots. The frontend currently provides manual Save; autosave and the final rich-text editor remain later gates.
+The current editor bridge stores an application-owned structured document envelope named `goreecloud.blocks`. Title/document edits create immutable pre-change revision snapshots. The frontend currently provides explicit conflict-safe Save; autosave is not enabled.
 
 ## Current Glaze UI Workflow
 
-The browser UI now uses the live workspace API for:
+The browser UI uses the live workspace API for normal notes, notebook/tag filtering and management, note organization, pinning, Archive/restore, recoverable Trash, indexed search, private attachments and inline images, revision history/recovery, title/body editing with explicit Save, and authenticated logout.
 
-- Home / normal notes;
-- notebook creation and notebook-filtered views;
-- nested-notebook creation;
-- tag creation and tag-filtered views;
-- per-note notebook selection;
-- per-note tag assignment/removal;
-- pin and unpin;
-- Archive and restore;
-- recoverable Trash and restore;
-- title/body editing with explicit Save;
-- authenticated logout.
-
-The UI deliberately does not expose permanent deletion yet. Rename/re-parent/reorder APIs for notebooks and rename/recolor APIs for tags exist server-side, but richer inline management controls remain polish work rather than a production-completeness claim.
+The UI deliberately does not expose permanent deletion yet.
 
 ## Continuous Integration Scripts
 
-Long live-stack checks are stored in versioned scripts rather than embedded entirely in the workflow YAML:
+Long live-stack checks are stored in versioned scripts rather than embedded entirely in the workflow YAML. Current gates cover authentication/password recovery, bounded login security, workspace/revisions/lifecycle, organization management, indexed search, attachments, portable export, disposable Memos import/equivalence, migration-provenance portability, and destructive disposable database-plus-attachment recovery.
 
-- `scripts/ci_validate_auth.sh`
-- `scripts/ci_validate_workspace.sh`
-
-The workspace script validates notebook cycle rejection, normalized tag uniqueness, tag assignment/filtering, cross-user notebook/tag/note isolation, immutable revisions, pin state, notebook deletion without note loss, tag-assignment cleanup, Archive/restore, and recoverable Trash against the real PostgreSQL/Compose stack.
+The backend CI installation uses `requirements.lock` as a constraints file, runs `pip check`, and verifies every distribution named by the lock is installed at exactly the recorded version. The Compose job separately proves the API image can build and run using the same runtime lock.
 
 ## Database Migrations
 
-Alembic is the native schema-migration boundary. The foundation includes the first native notes schema and the separate authentication migration.
+Alembic is the native schema-migration boundary. The current migration chain includes native note/authentication/search/login-security persistence and owner-scoped migration provenance through revision `0006_migration_provenance`.
 
 After adding or changing SQLAlchemy models:
 
