@@ -4,19 +4,21 @@ GoreeCloud Notes is a privacy-first, self-hosted note-taking, knowledge-manageme
 
 ## Status
 
-**Milestone 0 — Native Foundation is in progress. Production deployment is not approved.**
+**Milestone 0 — Native Foundation is in active development. Production deployment is not approved.**
 
-The native repository is being established independently from the transitional Memos-based GoreeCloud Notes implementation. `GoreeCloud/memos` remains preserved as a migration source, historical engineering record, and visual reference for the accepted Quick Notes experience until migration and replacement validation are complete.
+Draft PR #1 on `feature/native-foundation` contains the current native foundation. The application already has authenticated PostgreSQL-backed note persistence, owner isolation, nested notebook and tag organization, rich structured editing, conflict-safe explicit saves, immutable revision recovery, private attachments with safe raster previews and attachment-ID inline images, indexed PostgreSQL full-text search, note lifecycle controls, and a persistent Glaze UI. Those implemented capabilities remain development-stage until the remaining production, migration, backup/recovery, dependency, and security gates are closed.
+
+The native repository is independent from the transitional Memos-based GoreeCloud Notes implementation. `GoreeCloud/memos` remains preserved as a migration source, historical engineering record, and visual reference for the accepted Quick Notes experience until migration and replacement validation are complete.
 
 ## Product Direction
 
-GoreeCloud Notes will combine fast capture with an Evernote-class knowledge workspace. Planned product capabilities include:
+GoreeCloud Notes combines fast capture with an Evernote-class knowledge workspace. Product scope includes:
 
 - Quick Notes and a low-friction capture workflow.
 - Notebooks and nested notebooks.
 - All Notes, tags, favorites, shortcuts, pinned notes, Archive, and recoverable Trash.
-- Rich structured editing with Markdown interoperability.
-- Attachments and inline images.
+- Rich structured editing with a GoreeCloud-owned document contract and Markdown interoperability.
+- Private attachments, safe previews, and attachment-ID inline images.
 - Full-text search and filters.
 - Internal note links and backlinks.
 - Revision history and recovery.
@@ -36,20 +38,21 @@ React + TypeScript + Vite
         v
 FastAPI / Python
         |
-        +---- PostgreSQL
+        +---- PostgreSQL + indexed full-text search
         |
         +---- GoreeCloud-managed attachment storage
 ```
 
-Initial technology direction:
+Current technology direction:
 
 - Frontend: React + TypeScript + Vite.
+- Rich editor: open-source Tiptap/ProseMirror with an application-owned conversion boundary.
 - Design language: GoreeCloud Glaze UI.
 - Backend: Python + FastAPI.
-- Database: PostgreSQL.
-- Search: PostgreSQL full-text search initially.
+- Database: PostgreSQL with SQLAlchemy and Alembic.
+- Search: PostgreSQL generated `tsvector` + GIN index initially.
 - API: versioned HTTP API designed for web, browser-extension, and future mobile clients.
-- Deployment: Docker and Docker Compose after development validation.
+- Deployment: Docker and Docker Compose for development validation; production placement is not approved.
 - License: GNU Affero General Public License v3.0 only (`AGPL-3.0-only`).
 
 ## Repository Structure
@@ -59,8 +62,9 @@ goreecloud-notes/
 ├── frontend/                 # React/TypeScript/Vite web application
 ├── backend/                  # FastAPI application and tests
 ├── docker/                   # Container/deployment support
-├── docs/                     # Architecture, security, development, and migration records
+├── docs/                     # Architecture, attachment, recovery, development, and migration records
 ├── tests/                    # Cross-component and future end-to-end tests
+├── scripts/                  # Versioned live integration validation
 ├── .github/workflows/        # Continuous integration
 ├── .env.example              # Sanitized development configuration template
 ├── compose.yml               # Development Compose stack
@@ -75,25 +79,33 @@ goreecloud-notes/
 - Do not use production personal/family notes as a convenient development dataset.
 - Do not modify or delete the transitional Memos database or attachments merely because native development has started.
 - Do not publish backend ports directly to the public internet.
-- Do not treat a development container, migration, or local test as production approval.
+- Do not treat a development container, migration, green CI run, or draft pull request as production approval.
 - Preserve data portability, migration traceability, backup requirements, and rollback capability throughout development.
+- Do not allow arbitrary external URLs to bypass the owner-scoped attachment and inline-image model.
+- Do not hard-delete recoverable note/revision/attachment dependencies before retention and recovery policy is approved.
 
-## Milestone 0
+## Current Milestone 0 Foundation
 
-The native foundation milestone establishes:
+Implemented foundation work includes:
 
-- Repository and branch governance.
-- AGPL-3.0-only licensing.
-- React/TypeScript/Vite frontend foundation.
-- FastAPI backend foundation.
-- PostgreSQL development service.
-- Initial database/migration boundary.
-- Authentication and authorization architecture.
-- Glaze UI application shell.
-- CI for backend tests and frontend lint/build.
-- Development, security, architecture, and migration documentation.
+- Repository and branch governance with AGPL-3.0-only licensing.
+- React/TypeScript/Vite frontend with locked npm dependencies and Glaze UI.
+- FastAPI `/api/v1` backend and PostgreSQL persistence.
+- SQLAlchemy models and reviewed Alembic migration round trips.
+- Private administrative account creation, salted `scrypt` credentials, opaque database-backed sessions, and CSRF protection.
+- Explicit owner-scoped authorization and two-user isolation validation.
+- Nested notebooks, normalized tags, richer organization management, pinning, Archive/restore, and recoverable Trash.
+- Application-owned `goreecloud.blocks` structured document format with server-side canonicalization and strict compatibility checks.
+- Tiptap rich editing with optimistic concurrency and explicit conflict recovery.
+- Immutable revision snapshots and conflict-safe revision restore.
+- Private attachment byte storage, integrity checks, safe raster previews, and attachment-ID inline raster images.
+- Reference-aware attachment deletion protection so current or recoverable historical content does not lose required bytes.
+- Indexed PostgreSQL full-text search with scoped browser integration.
+- Backend unit tests plus live Compose validation for authentication, workspace, organization, search, revisions, and attachments.
 
-Milestone 0 is not complete until the foundation is validated and the remaining database, authentication, authorization, migration, and dependency-locking work is explicitly closed.
+Milestone 0 remains open for final dependency-locking decisions, broader production authentication/recovery hardening, PDF/document/SVG preview policy, malware scanning, resumable/large-object and final production storage design, migration tooling, backup/restore validation, and production-publication review.
+
+See `docs/architecture.md`, `docs/attachments.md`, `docs/revisions.md`, and `docs/migration.md` for the current technical boundaries.
 
 ## Branch Model
 
