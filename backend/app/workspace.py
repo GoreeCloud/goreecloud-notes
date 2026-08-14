@@ -80,6 +80,18 @@ class NoteView(BaseModel):
     updated_at: datetime
 
 
+class NoteRevisionView(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    revision_number: int
+    title: str
+    document: dict[str, object]
+    document_schema: int
+    created_at: datetime
+    change_summary: str | None
+
+
 def _owned_notebook(db: Session, *, owner_id: UUID, notebook_id: UUID) -> Notebook | None:
     return db.scalar(
         select(Notebook).where(
@@ -239,6 +251,27 @@ def get_note(
     """Return one note only when it belongs to the authenticated account."""
 
     return _require_owned_note(db, owner_id=context.user.id, note_id=note_id)
+
+
+@router.get("/notes/{note_id}/revisions", response_model=list[NoteRevisionView])
+def list_note_revisions(
+    note_id: UUID,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(get_current_auth_context),
+) -> list[NoteRevision]:
+    """List immutable content snapshots for one owned note."""
+
+    _require_owned_note(db, owner_id=context.user.id, note_id=note_id)
+    return list(
+        db.scalars(
+            select(NoteRevision)
+            .where(
+                NoteRevision.owner_id == context.user.id,
+                NoteRevision.note_id == note_id,
+            )
+            .order_by(NoteRevision.revision_number.desc())
+        )
+    )
 
 
 @router.patch("/notes/{note_id}", response_model=NoteView)
