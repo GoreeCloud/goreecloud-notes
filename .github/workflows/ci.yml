@@ -221,6 +221,9 @@ jobs:
       - name: Validate authenticated browser portable export
         run: bash scripts/ci_validate_browser_export.sh
 
+      - name: Validate destructive disposable native export and re-import round trip
+        run: bash scripts/ci_validate_native_reimport.sh
+
       - name: Validate disposable native Memos persistence import and equivalence
         run: bash scripts/ci_validate_memos_import.sh
 
