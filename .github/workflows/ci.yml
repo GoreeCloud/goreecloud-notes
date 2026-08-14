@@ -94,6 +94,14 @@ jobs:
       - name: Build and start development stack
         run: docker compose up --detach --build
 
+      - name: Validate database migration round trip
+        run: |
+          docker compose run --rm api alembic upgrade head
+          docker compose run --rm api alembic check
+          docker compose run --rm api alembic downgrade base
+          docker compose run --rm api alembic upgrade head
+          docker compose run --rm api alembic check
+
       - name: Validate live API and PostgreSQL readiness
         run: |
           for attempt in $(seq 1 30); do
