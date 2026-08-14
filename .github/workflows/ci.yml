@@ -182,6 +182,9 @@ jobs:
       - name: Validate disposable native Memos persistence import and equivalence
         run: bash scripts/ci_validate_memos_import.sh
 
+      - name: Validate imported migration provenance survives native export
+        run: bash scripts/ci_validate_migration_provenance_export.sh
+
       - name: Validate disposable database and attachment backup/restore
         run: bash scripts/ci_validate_backup_restore.sh
 
