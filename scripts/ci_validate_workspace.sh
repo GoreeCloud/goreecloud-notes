@@ -128,6 +128,72 @@ curl --fail --silent --show-error --cookie "$owner_cookies" "$base_url/notes/$no
 grep -F '"title":"Owner Autosaved Note"' /tmp/after-stale.json
 test "$(json_field /tmp/after-stale.json content_version)" = "3"
 
+# Revision restore is a new conflict-safe write and must preserve both sides of history.
+curl --fail --silent --show-error --cookie "$owner_cookies" \
+  --header "X-CSRF-Token: $owner_csrf" --header 'Content-Type: application/json' \
+  --data '{"title":"Revision Restore Source","document":{"format":"goreecloud.blocks","version":1,"blocks":[{"type":"paragraph","text":"Revision source body"}]}}' \
+  "$base_url/notes" > /tmp/revision-note.json
+revision_note_id=$(json_field /tmp/revision-note.json id)
+
+curl --fail --silent --show-error --cookie "$owner_cookies" \
+  --header "X-CSRF-Token: $owner_csrf" --header 'Content-Type: application/json' --request PATCH \
+  --data '{"expected_content_version":1,"title":"Revision Restore Current","document":{"format":"goreecloud.blocks","version":1,"blocks":[{"type":"paragraph","text":"Current body before restore"}]}}' \
+  "$base_url/notes/$revision_note_id" > /tmp/revision-current.json
+test "$(json_field /tmp/revision-current.json content_version)" = "2"
+
+curl --fail --silent --show-error --cookie "$owner_cookies" "$base_url/notes/$revision_note_id/revisions" > /tmp/revision-history-before-restore.json
+revision_id=$(python - <<'PY'
+import json
+with open('/tmp/revision-history-before-restore.json', encoding='utf-8') as handle:
+    revisions = json.load(handle)
+assert len(revisions) == 1
+assert revisions[0]['title'] == 'Revision Restore Source'
+assert revisions[0]['content_version'] == 1
+print(revisions[0]['id'])
+PY
+)
+
+# Restore requires CSRF and the exact current content version.
+test "$(status_of --cookie "$owner_cookies" --header 'Content-Type: application/json' \
+  --data '{"expected_content_version":2}' "$base_url/notes/$revision_note_id/revisions/$revision_id/restore")" = "403"
+test "$(status_of --cookie "$owner_cookies" --header "X-CSRF-Token: $owner_csrf" \
+  --header 'Content-Type: application/json' \
+  --data '{"expected_content_version":1}' "$base_url/notes/$revision_note_id/revisions/$revision_id/restore")" = "409"
+
+curl --fail --silent --show-error --cookie "$owner_cookies" \
+  --header "X-CSRF-Token: $owner_csrf" --header 'Content-Type: application/json' \
+  --data '{"expected_content_version":2}' "$base_url/notes/$revision_note_id/revisions/$revision_id/restore" \
+  > /tmp/revision-restored.json
+test "$(json_field /tmp/revision-restored.json content_version)" = "3"
+grep -F '"title":"Revision Restore Source"' /tmp/revision-restored.json
+grep -F 'Revision source body' /tmp/revision-restored.json
+
+curl --fail --silent --show-error --cookie "$owner_cookies" "$base_url/notes/$revision_note_id/revisions" > /tmp/revision-history-after-restore.json
+python - <<'PY'
+import json
+with open('/tmp/revision-history-after-restore.json', encoding='utf-8') as handle:
+    revisions = json.load(handle)
+assert len(revisions) == 2
+latest, original = revisions
+assert latest['revision_number'] == 2
+assert latest['content_version'] == 2
+assert latest['title'] == 'Revision Restore Current'
+assert latest['change_summary'] == 'Pre-restore snapshot before restoring revision 1'
+assert original['revision_number'] == 1
+assert original['content_version'] == 1
+assert original['title'] == 'Revision Restore Source'
+PY
+
+# Once the restore advances the note, the old expected version is stale.
+test "$(status_of --cookie "$owner_cookies" --header "X-CSRF-Token: $owner_csrf" \
+  --header 'Content-Type: application/json' \
+  --data '{"expected_content_version":2}' "$base_url/notes/$revision_note_id/revisions/$revision_id/restore")" = "409"
+# Another user must not be able to discover either the note's revision history or restore target.
+test "$(status_of --cookie "$other_cookies" "$base_url/notes/$revision_note_id/revisions")" = "404"
+test "$(status_of --cookie "$other_cookies" --header "X-CSRF-Token: $other_csrf" \
+  --header 'Content-Type: application/json' \
+  --data '{"expected_content_version":3}' "$base_url/notes/$revision_note_id/revisions/$revision_id/restore")" = "404"
+
 # Cross-user object and organization access must remain opaque.
 test "$(status_of --cookie "$other_cookies" "$base_url/notes/$note_id")" = "404"
 test "$(status_of --cookie "$other_cookies" --header "X-CSRF-Token: $other_csrf" \
