@@ -31,10 +31,49 @@ jobs:
         with:
           python-version: "3.13"
           cache: pip
-          cache-dependency-path: backend/pyproject.toml
+          cache-dependency-path: |
+            backend/pyproject.toml
+            backend/requirements.lock
 
-      - name: Install backend dependencies
-        run: python -m pip install -e ".[test]"
+      - name: Install locked backend dependencies
+        run: |
+          python -m pip install --constraint requirements.lock -e ".[test]"
+          python -m pip check
+
+      - name: Verify complete backend dependency lock
+        run: |
+          python - <<'PY'
+          from importlib.metadata import PackageNotFoundError, version
+          from pathlib import Path
+
+          locked = {}
+          for raw_line in Path('requirements.lock').read_text(encoding='utf-8').splitlines():
+              line = raw_line.strip()
+              if not line or line.startswith('#'):
+                  continue
+              if '==' not in line:
+                  raise SystemExit(f'Unlocked requirement in requirements.lock: {line}')
+              name, expected = line.split('==', 1)
+              normalized = name.strip().lower().replace('_', '-').replace('.', '-')
+              if normalized in locked:
+                  raise SystemExit(f'Duplicate locked distribution: {name}')
+              locked[normalized] = expected.strip()
+
+          missing = []
+          mismatched = []
+          for name, expected in sorted(locked.items()):
+              try:
+                  actual = version(name)
+              except PackageNotFoundError:
+                  missing.append(name)
+                  continue
+              if actual != expected:
+                  mismatched.append((name, expected, actual))
+
+          if missing or mismatched:
+              raise SystemExit(f'Backend dependency lock mismatch: missing={missing}, mismatched={mismatched}')
+          print(f'Validated {len(locked)} exact backend runtime/test dependency pins.')
+          PY
 
       - name: Compile backend
         run: python -m compileall -q app migrations
