@@ -160,12 +160,16 @@ with zipfile.ZipFile(path) as archive:
     assert library['account']['username'] == 'portable-export-user'
     assert library['summary'] == {
         'attachments': 1,
+        'migrationImports': 0,
+        'migrationNoteRecords': 0,
         'noteTagRelationships': 1,
         'notebooks': 1,
         'notes': 1,
         'revisions': 1,
         'tags': 1,
     }
+    assert library['migrationImports'] == []
+    assert library['migrationNoteRecords'] == []
 
     note = library['notes'][0]
     assert note['id'] == os.environ['EXPECTED_NOTE_ID']
@@ -191,6 +195,8 @@ with zipfile.ZipFile(path) as archive:
 
     assert bundle['library']['sha256'] == hashlib.sha256(library_raw).hexdigest()
     assert bundle['attachments'][0]['sha256'] == os.environ['EXPECTED_ATTACHMENT_SHA']
+    assert bundle['summary']['migrationImports'] == 0
+    assert bundle['summary']['migrationNoteRecords'] == 0
 
     serialized = json.dumps(library, sort_keys=True)
     assert 'storage_key' not in serialized
