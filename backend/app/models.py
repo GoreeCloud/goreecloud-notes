@@ -127,8 +127,9 @@ class Note(TimestampMixin, Base):
     """A user-owned native note.
 
     ``document`` is an application-owned structured document envelope. The
-    envelope schema is intentionally not tied to a rich-text editor library in
-    Milestone 0. ``document_schema`` versions that contract independently.
+    envelope schema is intentionally not tied to a rich-text editor library.
+    ``document_schema`` versions that contract independently, while
+    ``content_version`` provides optimistic concurrency for editor autosave.
     """
 
     __tablename__ = "notes"
@@ -138,6 +139,7 @@ class Note(TimestampMixin, Base):
             name="ck_notes_state",
         ),
         CheckConstraint("document_schema > 0", name="ck_notes_document_schema_positive"),
+        CheckConstraint("content_version > 0", name="ck_notes_content_version_positive"),
         Index("ix_notes_owner_state_updated", "owner_id", "state", "updated_at"),
         Index("ix_notes_owner_notebook", "owner_id", "notebook_id"),
     )
@@ -154,6 +156,7 @@ class Note(TimestampMixin, Base):
         JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
     )
     document_schema: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default=text("1"))
+    content_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default=text("1"))
     state: Mapped[str] = mapped_column(
         String(16), nullable=False, default="normal", server_default=text("'normal'")
     )
@@ -236,8 +239,10 @@ class NoteRevision(Base):
     __tablename__ = "note_revisions"
     __table_args__ = (
         UniqueConstraint("note_id", "revision_number", name="uq_note_revisions_note_number"),
+        UniqueConstraint("note_id", "content_version", name="uq_note_revisions_note_content_version"),
         CheckConstraint("revision_number > 0", name="ck_note_revisions_number_positive"),
         CheckConstraint("document_schema > 0", name="ck_note_revisions_document_schema_positive"),
+        CheckConstraint("content_version > 0", name="ck_note_revisions_content_version_positive"),
         Index("ix_note_revisions_owner_note", "owner_id", "note_id"),
     )
 
@@ -249,6 +254,7 @@ class NoteRevision(Base):
         Uuid, ForeignKey("notes.id", ondelete="CASCADE"), nullable=False
     )
     revision_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    content_version: Mapped[int] = mapped_column(Integer, nullable=False)
     title: Mapped[str] = mapped_column(String(512), nullable=False)
     document: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
     document_schema: Mapped[int] = mapped_column(Integer, nullable=False)
