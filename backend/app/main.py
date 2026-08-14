@@ -32,6 +32,7 @@ from .login_security import (
     record_login_success,
     request_source,
 )
+from .portability_api import router as portability_router
 from .search import router as search_router
 from .workspace import router as workspace_router
 
@@ -245,4 +246,5 @@ def logout(
 api.include_router(workspace_router)
 api.include_router(search_router)
 api.include_router(attachments_router)
+api.include_router(portability_router)
 app.include_router(api)
