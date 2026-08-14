@@ -120,7 +120,9 @@ function App() {
         </article>
 
         <footer className="source-footer">
-          AGPL-3.0-only · Source: GoreeCloud/goreecloud-notes
+          <span>AGPL-3.0-only</span>
+          <span aria-hidden="true"> · </span>
+          <a href="https://github.com/GoreeCloud/goreecloud-notes">Source code</a>
         </footer>
       </section>
     </main>
