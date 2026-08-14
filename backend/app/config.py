@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     environment: str = Field(default="development")
     api_prefix: str = Field(default="/api/v1")
     allowed_origins: str = Field(default="http://127.0.0.1:5173,http://localhost:5173")
+    session_ttl_seconds: int = Field(default=43_200, ge=900, le=2_592_000)
 
     database_host: str = Field(default="127.0.0.1")
     database_port: int = Field(default=5432)
@@ -36,6 +37,12 @@ class Settings(BaseSettings):
     @property
     def cors_origins(self) -> list[str]:
         return [origin.strip() for origin in self.allowed_origins.split(",") if origin.strip()]
+
+    @property
+    def secure_cookies(self) -> bool:
+        """Require HTTPS-only authentication cookies outside development."""
+
+        return self.environment.strip().casefold() != "development"
 
     @property
     def resolved_database_password(self) -> str:
