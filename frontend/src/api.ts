@@ -13,6 +13,17 @@ export type CurrentUser = {
   display_name: string;
 };
 
+export type BrowserSession = {
+  id: string;
+  created_at: string;
+  expires_at: string;
+  current: boolean;
+};
+
+export type SessionRevocationResult = {
+  revoked: number;
+};
+
 export type NoteState = "normal" | "archived" | "trashed";
 
 export type Notebook = {
@@ -199,6 +210,18 @@ export function login(username: string, password: string): Promise<CurrentUser> 
 
 export function logout(): Promise<void> {
   return apiFetch<void>("/auth/logout", { method: "POST" }, { csrf: true });
+}
+
+export function listBrowserSessions(): Promise<BrowserSession[]> {
+  return apiFetch<BrowserSession[]>("/auth/sessions");
+}
+
+export function revokeOtherBrowserSessions(): Promise<SessionRevocationResult> {
+  return apiFetch<SessionRevocationResult>(
+    "/auth/sessions/revoke-others",
+    { method: "POST" },
+    { csrf: true },
+  );
 }
 
 export function changePassword(currentPassword: string, newPassword: string): Promise<void> {
