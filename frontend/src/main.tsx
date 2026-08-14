@@ -5,6 +5,7 @@ import App from "./App";
 import "./styles.css";
 import "./organization.css";
 import "./rich-editor.css";
+import "./attachments.css";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
