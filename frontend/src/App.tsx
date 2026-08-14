@@ -25,7 +25,9 @@ import {
   restoreNoteRevision,
   searchNotes,
   trashNote,
+  updateNotebook,
   updateNote,
+  updateTag,
   uploadAttachment,
   type Attachment,
   type CurrentUser,
@@ -54,6 +56,182 @@ function formatBytes(value: number): string {
   if (value < 1024) return `${value} B`;
   if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
   return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function compareNotebooks(left: Notebook, right: Notebook): number {
+  return left.sort_order - right.sort_order || left.name.localeCompare(right.name);
+}
+
+function sortNotebooks(items: Notebook[]): Notebook[] {
+  return [...items].sort(compareNotebooks);
+}
+
+function sortTags(items: Tag[]): Tag[] {
+  return [...items].sort((left, right) => left.name.localeCompare(right.name));
+}
+
+function displayColor(value: string | null): string {
+  return value && /^#[0-9a-fA-F]{6}$/.test(value) ? value : "#5b7cfa";
+}
+
+function blockedNotebookParents(notebook: Notebook, notebooks: Notebook[]): Set<string> {
+  const blocked = new Set<string>([notebook.id]);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const candidate of notebooks) {
+      if (candidate.parent_id && blocked.has(candidate.parent_id) && !blocked.has(candidate.id)) {
+        blocked.add(candidate.id);
+        changed = true;
+      }
+    }
+  }
+  return blocked;
+}
+
+type NotebookManagerRowProps = {
+  notebook: Notebook;
+  notebooks: Notebook[];
+  disabled: boolean;
+  onOpen: (notebook: Notebook) => void;
+  onUpdated: (notebook: Notebook) => void;
+  onDelete: (notebook: Notebook) => Promise<void>;
+  onError: (message: string) => void;
+};
+
+function NotebookManagerRow({ notebook, notebooks, disabled, onOpen, onUpdated, onDelete, onError }: NotebookManagerRowProps) {
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [name, setName] = useState(notebook.name);
+  const [parentId, setParentId] = useState(notebook.parent_id ?? "");
+  const [sortOrder, setSortOrder] = useState(String(notebook.sort_order));
+  const blockedParents = blockedNotebookParents(notebook, notebooks);
+  const parent = notebooks.find((item) => item.id === notebook.parent_id) ?? null;
+
+  function startEditing() {
+    setName(notebook.name);
+    setParentId(notebook.parent_id ?? "");
+    setSortOrder(String(notebook.sort_order));
+    onError("");
+    setEditing(true);
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const cleanName = name.trim();
+    const order = Number(sortOrder);
+    if (!cleanName) {
+      onError("Notebook name is required.");
+      return;
+    }
+    if (!Number.isSafeInteger(order)) {
+      onError("Notebook order must be a whole number.");
+      return;
+    }
+
+    setSaving(true);
+    onError("");
+    try {
+      const updated = await updateNotebook(notebook.id, {
+        name: cleanName,
+        parent_id: parentId || null,
+        sort_order: order,
+      });
+      onUpdated(updated);
+      setEditing(false);
+    } catch (caught) {
+      onError(messageFromError(caught));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (editing) {
+    return (
+      <article className="manager-row editing">
+        <form className="manager-edit" onSubmit={handleSubmit}>
+          <div className="manager-edit-grid">
+            <label className="manager-field"><span>Name</span><input value={name} onChange={(event) => setName(event.target.value)} maxLength={255} required /></label>
+            <label className="manager-field"><span>Parent</span><select value={parentId} onChange={(event) => setParentId(event.target.value)}><option value="">No parent</option>{notebooks.filter((item) => !blockedParents.has(item.id)).map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select></label>
+            <label className="manager-field"><span>Order</span><input type="number" step="1" value={sortOrder} onChange={(event) => setSortOrder(event.target.value)} required /></label>
+          </div>
+          <div className="manager-edit-actions"><button type="button" onClick={() => setEditing(false)} disabled={saving}>Cancel</button><button className="primary-button" type="submit" disabled={saving}>{saving ? "Saving…" : "Save"}</button></div>
+        </form>
+      </article>
+    );
+  }
+
+  return (
+    <article className="manager-row">
+      <div className="manager-summary"><strong>{notebook.name}</strong><span>{parent ? `Nested under ${parent.name}` : "Top-level notebook"} · Order {notebook.sort_order}</span></div>
+      <div className="manager-actions"><button type="button" onClick={() => onOpen(notebook)} disabled={disabled}>Open</button><button type="button" onClick={startEditing} disabled={disabled}>Edit</button><button type="button" onClick={() => void onDelete(notebook)} disabled={disabled}>Delete</button></div>
+    </article>
+  );
+}
+
+type TagManagerRowProps = {
+  tag: Tag;
+  disabled: boolean;
+  onOpen: (tag: Tag) => void;
+  onUpdated: (tag: Tag) => void;
+  onDelete: (tag: Tag) => Promise<void>;
+  onError: (message: string) => void;
+};
+
+function TagManagerRow({ tag, disabled, onOpen, onUpdated, onDelete, onError }: TagManagerRowProps) {
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [name, setName] = useState(tag.name);
+  const [color, setColor] = useState<string | null>(tag.color);
+
+  function startEditing() {
+    setName(tag.name);
+    setColor(tag.color);
+    onError("");
+    setEditing(true);
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const cleanName = name.trim();
+    if (!cleanName) {
+      onError("Tag name is required.");
+      return;
+    }
+
+    setSaving(true);
+    onError("");
+    try {
+      const updated = await updateTag(tag.id, { name: cleanName, color });
+      onUpdated(updated);
+      setEditing(false);
+    } catch (caught) {
+      onError(messageFromError(caught));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (editing) {
+    return (
+      <article className="manager-row editing">
+        <form className="manager-edit" onSubmit={handleSubmit}>
+          <div className="manager-edit-grid tag-grid">
+            <label className="manager-field"><span>Name</span><input value={name} onChange={(event) => setName(event.target.value)} maxLength={128} required /></label>
+            <label className="manager-field"><span>Color</span><span className="manager-color-control"><input type="color" aria-label="Tag color" value={displayColor(color)} onChange={(event) => setColor(event.target.value)} /><button type="button" onClick={() => setColor(null)} disabled={color === null}>Clear color</button></span></label>
+          </div>
+          <div className="manager-edit-actions"><button type="button" onClick={() => setEditing(false)} disabled={saving}>Cancel</button><button className="primary-button" type="submit" disabled={saving}>{saving ? "Saving…" : "Save"}</button></div>
+        </form>
+      </article>
+    );
+  }
+
+  return (
+    <article className="manager-row">
+      <div className="manager-summary"><div className="manager-summary-title"><span className="tag-color-dot" aria-hidden="true" style={{ backgroundColor: tag.color ?? undefined }} /><strong>#{tag.name}</strong></div><span>{tag.color ? `Color ${tag.color}` : "No custom color"} · normalized as {tag.normalized_name}</span></div>
+      <div className="manager-actions"><button type="button" onClick={() => onOpen(tag)} disabled={disabled}>Open</button><button type="button" onClick={startEditing} disabled={disabled}>Edit</button><button type="button" onClick={() => void onDelete(tag)} disabled={disabled}>Delete</button></div>
+    </article>
+  );
 }
 
 type LoginScreenProps = { onAuthenticated: (user: CurrentUser) => Promise<void> };
@@ -187,8 +365,8 @@ function App() {
     const [loadedNotes, loadedNotebooks, loadedTags] = await Promise.all([listNotes(), listNotebooks(), listTags()]);
     setUser(authenticatedUser);
     setNotes(loadedNotes);
-    setNotebooks(loadedNotebooks);
-    setTags(loadedTags);
+    setNotebooks(sortNotebooks(loadedNotebooks));
+    setTags(sortTags(loadedTags));
     setSearch("");
     setSearchResults(null);
     setSearchError("");
@@ -205,8 +383,8 @@ function App() {
         if (cancelled) return;
         setUser(currentUser);
         setNotes(loadedNotes);
-        setNotebooks(loadedNotebooks);
-        setTags(loadedTags);
+        setNotebooks(sortNotebooks(loadedNotebooks));
+        setTags(sortTags(loadedTags));
         setAuthState("authenticated");
         const first = loadedNotes[0] ?? null;
         applyEditorNote(first);
@@ -434,7 +612,7 @@ function App() {
     const assigned = activeNoteTags.some((item) => item.id === tag.id);
     try {
       if (assigned) { await removeNoteTag(selectedNote.id, tag.id); setActiveNoteTags((current) => current.filter((item) => item.id !== tag.id)); if (view === "tag" && filterId === tag.id) setSearchResults((current) => current?.filter((note) => note.id !== selectedNote.id) ?? null); }
-      else { await assignNoteTag(selectedNote.id, tag.id); setActiveNoteTags((current) => [...current, tag].sort((a, b) => a.name.localeCompare(b.name))); }
+      else { await assignNoteTag(selectedNote.id, tag.id); setActiveNoteTags((current) => sortTags([...current, tag])); }
     } catch (caught) { setError(messageFromError(caught)); }
     finally { setBusy(false); }
   }
@@ -442,30 +620,46 @@ function App() {
   async function handleCreateNotebook(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); const name = newNotebookName.trim(); if (!name) return;
     setBusy(true); setError("");
-    try { const notebook = await createNotebook(name, newNotebookParent || null); setNotebooks((current) => [...current, notebook].sort((a, b) => a.name.localeCompare(b.name))); setNewNotebookName(""); setNewNotebookParent(""); }
+    try { const notebook = await createNotebook(name, newNotebookParent || null); setNotebooks((current) => sortNotebooks([...current, notebook])); setNewNotebookName(""); setNewNotebookParent(""); }
     catch (caught) { setError(messageFromError(caught)); }
     finally { setBusy(false); }
   }
 
+  function handleNotebookUpdated(updated: Notebook) {
+    setNotebooks((current) => sortNotebooks(current.map((item) => item.id === updated.id ? updated : item)));
+  }
+
   async function handleDeleteNotebook(notebook: Notebook) {
     setBusy(true); setError("");
-    try { await deleteNotebook(notebook.id); setNotebooks((current) => current.filter((item) => item.id !== notebook.id)); if (filterId === notebook.id) await changeView("home"); }
-    catch (caught) { setError(messageFromError(caught)); }
+    try {
+      await deleteNotebook(notebook.id);
+      setNotebooks(sortNotebooks(await listNotebooks()));
+      if (filterId === notebook.id) await changeView("home");
+    } catch (caught) { setError(messageFromError(caught)); }
     finally { setBusy(false); }
   }
 
   async function handleCreateTag(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); const name = newTagName.trim(); if (!name) return;
     setBusy(true); setError("");
-    try { const tag = await createTag(name); setTags((current) => [...current, tag].sort((a, b) => a.name.localeCompare(b.name))); setNewTagName(""); }
+    try { const tag = await createTag(name); setTags((current) => sortTags([...current, tag])); setNewTagName(""); }
     catch (caught) { setError(messageFromError(caught)); }
     finally { setBusy(false); }
   }
 
+  function handleTagUpdated(updated: Tag) {
+    setTags((current) => sortTags(current.map((item) => item.id === updated.id ? updated : item)));
+    setActiveNoteTags((current) => sortTags(current.map((item) => item.id === updated.id ? updated : item)));
+  }
+
   async function handleDeleteTag(tag: Tag) {
     setBusy(true); setError("");
-    try { await deleteTag(tag.id); setTags((current) => current.filter((item) => item.id !== tag.id)); setActiveNoteTags((current) => current.filter((item) => item.id !== tag.id)); if (filterId === tag.id) await changeView("home"); }
-    catch (caught) { setError(messageFromError(caught)); }
+    try {
+      await deleteTag(tag.id);
+      setTags(sortTags(await listTags()));
+      setActiveNoteTags((current) => current.filter((item) => item.id !== tag.id));
+      if (filterId === tag.id) await changeView("home");
+    } catch (caught) { setError(messageFromError(caught)); }
     finally { setBusy(false); }
   }
 
@@ -503,9 +697,15 @@ function App() {
         {error ? <p className="workspace-error" role="alert">{error}</p> : null}
         {searchError ? <p className="workspace-error" role="alert">Search failed: {searchError}</p> : null}
         {view === "notebooks" ? (
-          <div className="manager-stack"><form className="manager-create" onSubmit={handleCreateNotebook}><input aria-label="New notebook name" placeholder="New notebook" value={newNotebookName} onChange={(event) => setNewNotebookName(event.target.value)} required /><select aria-label="Parent notebook" value={newNotebookParent} onChange={(event) => setNewNotebookParent(event.target.value)}><option value="">No parent</option>{notebooks.map((notebook) => <option value={notebook.id} key={notebook.id}>{notebook.name}</option>)}</select><button className="primary-button" type="submit" disabled={busy}>Create notebook</button></form><div className="manager-list">{notebooks.map((notebook) => <article className="manager-row" key={notebook.id}><div><strong>{notebook.name}</strong><span>{notebook.parent_id ? "Nested notebook" : "Top-level notebook"}</span></div><div className="manager-actions"><button type="button" onClick={() => void changeView("notebook", notebook.id)}>Open</button><button type="button" onClick={() => void handleDeleteNotebook(notebook)} disabled={busy}>Delete</button></div></article>)}{notebooks.length === 0 ? <div className="empty-list"><strong>No notebooks yet</strong><span>Create a notebook to organize related notes.</span></div> : null}</div></div>
+          <div className="manager-stack">
+            <form className="manager-create" onSubmit={handleCreateNotebook}><input aria-label="New notebook name" placeholder="New notebook" value={newNotebookName} onChange={(event) => setNewNotebookName(event.target.value)} required /><select aria-label="Parent notebook" value={newNotebookParent} onChange={(event) => setNewNotebookParent(event.target.value)}><option value="">No parent</option>{notebooks.map((notebook) => <option value={notebook.id} key={notebook.id}>{notebook.name}</option>)}</select><button className="primary-button" type="submit" disabled={busy}>Create notebook</button></form>
+            <div className="manager-list">{notebooks.map((notebook) => <NotebookManagerRow key={notebook.id} notebook={notebook} notebooks={notebooks} disabled={busy} onOpen={(item) => void changeView("notebook", item.id)} onUpdated={handleNotebookUpdated} onDelete={handleDeleteNotebook} onError={setError} />)}{notebooks.length === 0 ? <div className="empty-list"><strong>No notebooks yet</strong><span>Create a notebook to organize related notes.</span></div> : null}</div>
+          </div>
         ) : view === "tags" ? (
-          <div className="manager-stack"><form className="manager-create" onSubmit={handleCreateTag}><input aria-label="New tag name" placeholder="New tag" value={newTagName} onChange={(event) => setNewTagName(event.target.value)} required /><button className="primary-button" type="submit" disabled={busy}>Create tag</button></form><div className="manager-list">{tags.map((tag) => <article className="manager-row" key={tag.id}><div><strong>#{tag.name}</strong><span>Private organizational tag</span></div><div className="manager-actions"><button type="button" onClick={() => void changeView("tag", tag.id)}>Open</button><button type="button" onClick={() => void handleDeleteTag(tag)} disabled={busy}>Delete</button></div></article>)}{tags.length === 0 ? <div className="empty-list"><strong>No tags yet</strong><span>Create tags for flexible organization across notebooks.</span></div> : null}</div></div>
+          <div className="manager-stack">
+            <form className="manager-create" onSubmit={handleCreateTag}><input aria-label="New tag name" placeholder="New tag" value={newTagName} onChange={(event) => setNewTagName(event.target.value)} required /><button className="primary-button" type="submit" disabled={busy}>Create tag</button></form>
+            <div className="manager-list">{tags.map((tag) => <TagManagerRow key={tag.id} tag={tag} disabled={busy} onOpen={(item) => void changeView("tag", item.id)} onUpdated={handleTagUpdated} onDelete={handleDeleteTag} onError={setError} />)}{tags.length === 0 ? <div className="empty-list"><strong>No tags yet</strong><span>Create tags for flexible organization across notebooks.</span></div> : null}</div>
+          </div>
         ) : (
           <><label className="search-box"><span aria-hidden="true">⌕</span><input type="search" maxLength={200} placeholder="Search notes" aria-label="Search notes" value={search} onChange={(event) => setSearch(event.target.value)} /></label>{noteState === "normal" ? <button className="quick-capture" type="button" onClick={handleCreateNote} disabled={busy}><span>Take a note…</span><span className="quick-actions" aria-hidden="true">＋</span></button> : null}<div className="notes-stack">{visibleNotes.map((note) => <button className={`note-card${note.id === selectedId ? " selected" : ""}`} type="button" key={note.id} onClick={() => void openNote(note)}><div className="note-card-heading"><h2>{note.title || "Untitled"}</h2>{note.is_pinned ? <span title="Pinned" aria-label="Pinned">●</span> : null}</div><p>{documentToText(note.document) || "Empty note"}</p><small>{new Date(note.updated_at).toLocaleString()}</small></button>)}{visibleNotes.length === 0 ? <div className="empty-list"><strong>{searching ? "Searching…" : search.trim() ? "No matching notes" : `No ${paneTitle.toLocaleLowerCase()} notes`}</strong><span>{searching ? "Searching the private PostgreSQL index." : search.trim() ? "Try another search. Phrase and web-style queries are supported." : "Nothing is stored in this view yet."}</span></div> : null}</div></>
         )}
@@ -514,11 +714,11 @@ function App() {
 
       <section className="editor-pane" aria-label="Note editor">
         {managementView ? (
-          <div className="empty-editor organization-editor"><p className="eyebrow">Organization</p><h2>{view === "notebooks" ? "Structure your knowledge." : "Connect ideas across notebooks."}</h2><p>{view === "notebooks" ? "Notebooks provide hierarchy. Deleting a notebook preserves its notes and returns them to the unfiled library." : "Tags provide flexible cross-notebook organization and can be assigned directly from the note editor."}</p></div>
+          <div className="empty-editor organization-editor"><p className="eyebrow">Organization</p><h2>{view === "notebooks" ? "Structure your knowledge." : "Connect ideas across notebooks."}</h2><p>{view === "notebooks" ? "Rename notebooks, move them within the hierarchy, and control their explicit sort order. Deleting a notebook preserves its notes and promotes child notebooks through the server's SET NULL rules." : "Rename and recolor tags while preserving their note assignments. Tag names remain normalized per user to prevent duplicate organizational identities."}</p></div>
         ) : selectedNote ? (
           <><header className="editor-toolbar"><div className="crumbs">{paneTitle} / {selectedNote.title || "Untitled"}</div><div className="toolbar-actions editor-actions"><span className={`save-state${dirty ? " dirty" : ""}`}>{conflict ? "Conflict" : dirty ? "Unsaved changes" : saveState}</span>{conflict ? <button type="button" onClick={() => void handleReloadServerVersion()} disabled={busy}>Reload server version</button> : null}{noteState === "normal" ? <><button type="button" onClick={() => void handlePinToggle()} disabled={busy || conflict}>{selectedNote.is_pinned ? "Unpin" : "Pin"}</button><button type="button" onClick={() => void handleStateChange("archived")} disabled={busy || conflict}>Archive</button><button type="button" onClick={handleTrash} disabled={busy || conflict}>Trash</button></> : <button type="button" onClick={() => void handleStateChange("normal")} disabled={busy || conflict}>Restore</button>}<button className="save-button" type="button" onClick={handleSave} disabled={busy || !dirty || conflict}>Save</button></div></header>
           <article className="editor-surface live-editor"><p className="eyebrow">Private note</p><input className="title-input" aria-label="Note title" placeholder="Untitled" value={title} onChange={(event) => setTitle(event.target.value)} disabled={conflict} />
-            <div className="note-metadata-controls"><label><span>Notebook</span><select value={editorNotebookId ?? ""} onChange={(event) => setEditorNotebookId(event.target.value || null)} disabled={conflict}><option value="">Unfiled</option>{notebooks.map((notebook) => <option value={notebook.id} key={notebook.id}>{notebook.name}</option>)}</select></label><div className="tag-assignment" aria-label="Note tags"><span>Tags</span><div className="tag-chip-list">{tags.map((tag) => { const assigned = activeNoteTags.some((item) => item.id === tag.id); return <button className={`tag-chip${assigned ? " assigned" : ""}`} type="button" aria-pressed={assigned} key={tag.id} onClick={() => void handleTagToggle(tag)} disabled={busy || conflict}>#{tag.name}</button>; })}{tags.length === 0 ? <span className="no-tags">No tags created</span> : null}</div></div></div>
+            <div className="note-metadata-controls"><label><span>Notebook</span><select value={editorNotebookId ?? ""} onChange={(event) => setEditorNotebookId(event.target.value || null)} disabled={conflict}><option value="">Unfiled</option>{notebooks.map((notebook) => <option value={notebook.id} key={notebook.id}>{notebook.name}</option>)}</select></label><div className="tag-assignment" aria-label="Note tags"><span>Tags</span><div className="tag-chip-list">{tags.map((tag) => { const assigned = activeNoteTags.some((item) => item.id === tag.id); return <button className={`tag-chip${assigned ? " assigned" : ""}`} type="button" aria-pressed={assigned} key={tag.id} onClick={() => void handleTagToggle(tag)} disabled={busy || conflict}><span className="tag-color-dot" aria-hidden="true" style={{ backgroundColor: tag.color ?? undefined }} />#{tag.name}</button>; })}{tags.length === 0 ? <span className="no-tags">No tags created</span> : null}</div></div></div>
             <section className="attachment-panel" aria-labelledby="attachment-heading"><div className="attachment-heading"><div><span id="attachment-heading">Attachments</span><small>{attachments.length} file{attachments.length === 1 ? "" : "s"}</small></div><label className="attachment-upload"><span>{uploadingAttachment ? "Uploading…" : "Add file"}</span><input type="file" onChange={handleAttachmentUpload} disabled={uploadingAttachment || conflict} /></label></div><div className="attachment-list">{attachments.map((attachment) => <div className="attachment-row" key={attachment.id}><div><a href={attachmentDownloadUrl(attachment.id)}>{attachment.filename}</a><span>{formatBytes(attachment.size_bytes)} · {attachment.media_type}</span></div><button type="button" onClick={() => void handleAttachmentDelete(attachment)} disabled={uploadingAttachment || conflict}>Remove</button></div>)}{attachments.length === 0 ? <span className="attachment-empty">No files attached.</span> : null}</div></section>
             <section className="attachment-panel" aria-labelledby="history-heading"><div className="attachment-heading"><div><span id="history-heading">History</span><small>{revisions.length} recoverable revision{revisions.length === 1 ? "" : "s"}</small></div></div><div className="attachment-list">{revisions.map((revision) => <div className="attachment-row" key={revision.id}><div><strong>Revision {revision.revision_number} · {revision.title || "Untitled"}</strong><span>{new Date(revision.created_at).toLocaleString()} · content version {revision.content_version}</span><span>{documentToText(revision.document).slice(0, 120) || "Empty note"}</span>{revision.change_summary ? <span>{revision.change_summary}</span> : null}</div><button type="button" onClick={() => void handleRevisionRestore(revision)} disabled={busy || dirty || conflict}>Restore</button></div>)}{revisions.length === 0 ? <span className="attachment-empty">No historical revisions yet. A revision is created before eligible content changes.</span> : null}</div><p className="editor-meta">Restoring creates a new content version and preserves the current content as history. Notebook, tags, state, pinning, color, and attachments are not changed.</p></section>
             <p className="editor-meta">Structured GoreeCloud document · content version {selectedNote.content_version}</p><RichNoteEditor noteId={selectedNote.id} value={editorDocument} onChange={setEditorDocument} disabled={busy || conflict} /><div className="callout foundation-callout"><strong>{conflict ? "Conflict protection is active" : "Native rich editing is active"}</strong><span>{conflict ? "The local editor is locked until you reload the current server version, preventing a stale draft from overwriting newer content." : "Rich text is converted through the GoreeCloud-owned document contract and saved with optimistic concurrency protection. Attachments use separate owner-authorized byte storage, and historical content can be restored without rewriting revision history."}</span></div></article></>
