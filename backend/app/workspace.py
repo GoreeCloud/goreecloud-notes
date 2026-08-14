@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import re
 from datetime import UTC, datetime, timedelta
 from typing import Literal
 from unicodedata import normalize
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -16,22 +17,21 @@ from sqlalchemy.orm import Session
 from .auth import AuthContext, get_current_auth_context, require_csrf
 from .config import get_settings
 from .database import get_db
-from .models import Note, Notebook, NoteRevision, NoteTag, Tag
+from .documents import (
+    DOCUMENT_SCHEMA,
+    SAFE_INLINE_IMAGE_MEDIA_TYPES,
+    DocumentValidationError,
+    attachment_image_ids,
+    canonicalize_document,
+    empty_document,
+)
+from .models import Attachment, Note, Notebook, NoteRevision, NoteTag, Tag
 
 router = APIRouter(tags=["workspace"])
 settings = get_settings()
 
 NoteState = Literal["normal", "archived", "trashed"]
-
-
-def empty_document() -> dict[str, object]:
-    """Return the editor-independent Milestone 0 document envelope."""
-
-    return {
-        "format": "goreecloud.blocks",
-        "version": 1,
-        "blocks": [],
-    }
+HEX_COLOR_PATTERN = re.compile(r"^#[0-9a-fA-F]{6}$")
 
 
 def _clean_display_name(value: str) -> str:
@@ -42,6 +42,17 @@ def _clean_display_name(value: str) -> str:
 
 def _normalized_name(value: str) -> str:
     return _clean_display_name(value).casefold()
+
+
+def _normalize_color(value: str | None) -> str | None:
+    """Keep UI color metadata limited to portable six-digit sRGB hex values."""
+
+    if value is None:
+        return None
+    clean = value.strip()
+    if not HEX_COLOR_PATTERN.fullmatch(clean):
+        raise ValueError("color must be a six-digit hexadecimal value such as #5b7cfa")
+    return clean.lower()
 
 
 class NotebookCreate(BaseModel):
@@ -70,10 +81,20 @@ class TagCreate(BaseModel):
     name: str = Field(min_length=1, max_length=128)
     color: str | None = Field(default=None, max_length=32)
 
+    @field_validator("color")
+    @classmethod
+    def validate_color(cls, value: str | None) -> str | None:
+        return _normalize_color(value)
+
 
 class TagPatch(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=128)
     color: str | None = Field(default=None, max_length=32)
+
+    @field_validator("color")
+    @classmethod
+    def validate_color(cls, value: str | None) -> str | None:
+        return _normalize_color(value)
 
 
 class TagView(BaseModel):
@@ -90,10 +111,27 @@ class TagView(BaseModel):
 class NoteCreate(BaseModel):
     title: str = Field(default="", max_length=512)
     document: dict[str, object] = Field(default_factory=empty_document)
-    document_schema: int = Field(default=1, ge=1)
+    document_schema: int = Field(default=DOCUMENT_SCHEMA, ge=1)
     notebook_id: UUID | None = None
     is_pinned: bool = False
     color: str | None = Field(default=None, max_length=32)
+
+    @field_validator("document")
+    @classmethod
+    def validate_document(cls, value: dict[str, object]) -> dict[str, object]:
+        return canonicalize_document(value)
+
+    @field_validator("document_schema")
+    @classmethod
+    def validate_document_schema(cls, value: int) -> int:
+        if value != DOCUMENT_SCHEMA:
+            raise ValueError("unsupported document schema")
+        return value
+
+    @field_validator("color")
+    @classmethod
+    def validate_color(cls, value: str | None) -> str | None:
+        return _normalize_color(value)
 
 
 class NotePatch(BaseModel):
@@ -105,6 +143,25 @@ class NotePatch(BaseModel):
     state: NoteState | None = None
     is_pinned: bool | None = None
     color: str | None = Field(default=None, max_length=32)
+
+    @field_validator("document")
+    @classmethod
+    def validate_document(cls, value: dict[str, object] | None) -> dict[str, object]:
+        if value is None:
+            raise ValueError("document cannot be null")
+        return canonicalize_document(value)
+
+    @field_validator("document_schema")
+    @classmethod
+    def validate_document_schema(cls, value: int | None) -> int:
+        if value is None or value != DOCUMENT_SCHEMA:
+            raise ValueError("unsupported document schema")
+        return value
+
+    @field_validator("color")
+    @classmethod
+    def validate_color(cls, value: str | None) -> str | None:
+        return _normalize_color(value)
 
 
 class NoteView(BaseModel):
@@ -253,6 +310,44 @@ def _validate_notebook_parent(
         )
 
 
+def _validate_attachment_image_references(
+    db: Session,
+    *,
+    owner_id: UUID,
+    note_id: UUID,
+    document: dict[str, object],
+) -> None:
+    """Require every inline image to reference one safe raster attachment on this note."""
+
+    reference_ids = attachment_image_ids(document)
+    if not reference_ids:
+        return
+
+    attachments = list(
+        db.scalars(
+            select(Attachment).where(
+                Attachment.owner_id == owner_id,
+                Attachment.note_id == note_id,
+                Attachment.id.in_(reference_ids),
+            )
+        )
+    )
+    by_id = {attachment.id: attachment for attachment in attachments}
+    if set(by_id) != reference_ids:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="document contains an unavailable inline image attachment",
+        )
+    if any(
+        attachment.media_type.casefold() not in SAFE_INLINE_IMAGE_MEDIA_TYPES
+        for attachment in attachments
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="document inline images must use approved raster attachment types",
+        )
+
+
 def _latest_revision(db: Session, *, note_id: UUID) -> NoteRevision | None:
     return db.scalar(
         select(NoteRevision)
@@ -296,7 +391,7 @@ def _create_revision(
 def _content_changed(note: Note, payload: NotePatch, fields: set[str]) -> bool:
     if "title" in fields and (payload.title or "") != note.title:
         return True
-    if "document" in fields and (payload.document or empty_document()) != note.document:
+    if "document" in fields and payload.document != note.document:
         return True
     if (
         "document_schema" in fields
@@ -482,6 +577,11 @@ def create_note(
     context: AuthContext = Depends(require_csrf),
 ) -> Note:
     _validate_notebook_owner(db, owner_id=context.user.id, notebook_id=payload.notebook_id)
+    if attachment_image_ids(payload.document):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="inline images must reference attachments uploaded to the note first",
+        )
     note = Note(
         owner_id=context.user.id,
         notebook_id=payload.notebook_id,
@@ -605,12 +705,26 @@ def restore_note_revision(
             status_code=status.HTTP_409_CONFLICT,
             detail="note changed in another session; reload before restoring",
         )
+    if revision.document_schema != DOCUMENT_SCHEMA:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="revision uses an unsupported document schema",
+        )
+    try:
+        restored_document = canonicalize_document(revision.document)
+    except DocumentValidationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="revision document is not compatible with this GoreeCloud Notes version",
+        ) from exc
+    _validate_attachment_image_references(
+        db,
+        owner_id=context.user.id,
+        note_id=note.id,
+        document=restored_document,
+    )
 
-    if (
-        revision.title == note.title
-        and revision.document == note.document
-        and revision.document_schema == note.document_schema
-    ):
+    if revision.title == note.title and restored_document == note.document:
         return note
 
     _create_revision(
@@ -619,8 +733,8 @@ def restore_note_revision(
         change_summary=f"Pre-restore snapshot before restoring revision {revision.revision_number}",
     )
     note.title = revision.title
-    note.document = revision.document
-    note.document_schema = revision.document_schema
+    note.document = restored_document
+    note.document_schema = DOCUMENT_SCHEMA
     note.content_version += 1
 
     db.commit()
@@ -648,6 +762,13 @@ def update_note(
 
     if "notebook_id" in fields:
         _validate_notebook_owner(db, owner_id=context.user.id, notebook_id=payload.notebook_id)
+    if "document" in fields and payload.document is not None:
+        _validate_attachment_image_references(
+            db,
+            owner_id=context.user.id,
+            note_id=note.id,
+            document=payload.document,
+        )
 
     content_changed = _content_changed(note, payload, fields)
     if content_changed:
@@ -667,8 +788,8 @@ def update_note(
 
     if "title" in fields:
         note.title = payload.title or ""
-    if "document" in fields:
-        note.document = payload.document or empty_document()
+    if "document" in fields and payload.document is not None:
+        note.document = payload.document
     if "document_schema" in fields and payload.document_schema is not None:
         note.document_schema = payload.document_schema
     if "notebook_id" in fields:
