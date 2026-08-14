@@ -4,11 +4,40 @@
 
 GoreeCloud Notes must preserve user knowledge independently from the database engine, attachment filesystem layout, deployment host, container, or future application implementation.
 
-Milestone 0 therefore includes an administrator-operated full-library export that produces one verified ZIP bundle for a selected GoreeCloud Notes account. If that account contains data imported from a transitional source, the bundle also preserves the exact owner-scoped migration provenance needed to understand what the source contained and which semantics remain intentionally deferred in the native projection.
+Milestone 0 therefore includes both a user-facing authenticated browser download and an administrator-operated command-line path for producing one verified ZIP bundle for a selected GoreeCloud Notes account. If that account contains data imported from a transitional source, the bundle also preserves the exact owner-scoped migration provenance needed to understand what the source contained and which semantics remain intentionally deferred in the native projection.
 
 This is a portability and recovery feature. It is not a database backup replacement, and it does not authorize production deployment by itself.
 
-## Command
+## Browser Download
+
+The Glaze UI exposes **Download full library** from the authenticated **Account & Security** page.
+
+The browser path uses:
+
+```text
+POST /api/v1/exports/library
+```
+
+The endpoint requires a live private browser session and the existing double-submit CSRF cookie/header proof. Unauthenticated requests are rejected before export generation, and an authenticated request without valid CSRF proof is rejected.
+
+The endpoint calls the same verified owner-scoped native exporter used by the administrative CLI. It does not implement a weaker browser-only serialization path.
+
+For each request, the API:
+
+1. creates a private temporary export directory;
+2. generates the selected authenticated user's full portable library through the shared exporter;
+3. revalidates native relationships, attachment bytes, and migration provenance where present;
+4. independently verifies the completed ZIP through the existing portability layer;
+5. returns the ZIP as an attachment with a server-generated UTC filename;
+6. includes the completed archive SHA-256 in `X-GoreeCloud-Export-SHA256`;
+7. sends `Cache-Control: no-store, max-age=0`, `Pragma: no-cache`, and `X-Content-Type-Options: nosniff`; and
+8. removes the temporary server-side export directory after the response body has been delivered.
+
+The browser displays the returned SHA-256 after starting the local download so the portable artifact has a user-visible integrity value. Browser object URLs are released after a short delay instead of immediately after the click, avoiding premature download cancellation in browser engines that resolve the object URL asynchronously.
+
+The Account & Security launcher opens that page in a separate tab while explicit Save remains the Notes editor behavior. This prevents opening account settings from unmounting the current Notes workspace and discarding an unsaved editor draft.
+
+## Administrative Command
 
 Run the export from the API application environment so it can read the configured PostgreSQL database and private attachment root:
 
@@ -117,15 +146,15 @@ Before the ZIP is finalized, the exporter:
 5. requires both values to match PostgreSQL metadata;
 6. writes the attachment under an attachment-UUID-scoped archive path;
 7. writes SHA-256 and size evidence into the bundle manifest; and
-8. verifies the completed temporary ZIP before atomically replacing the requested destination.
+8. verifies the completed temporary ZIP before atomically replacing the requested destination or serving the browser artifact.
 
-If required bytes are missing or disagree with metadata, the full-library export fails instead of silently creating an incomplete archive.
+If required bytes are missing or disagree with metadata, the full-library export fails instead of silently creating an incomplete archive. The browser endpoint converts an export-integrity refusal to a generic HTTP `409` rather than exposing an internal attachment path or other storage detail.
 
-## Atomic Output and Replacement
+## Atomic Output and Temporary Browser Delivery
 
-The exporter writes to temporary files in the destination directory, verifies the native base export, rebuilds it with validated migration provenance where applicable, verifies the final temporary bundle, and only then atomically replaces the final output path.
+The administrative exporter writes to temporary files in the destination directory, verifies the native base export, rebuilds it with validated migration provenance where applicable, verifies the final temporary bundle, and only then atomically replaces the final output path. Existing command-line export files are protected by default; replacement requires the explicit `--overwrite` flag.
 
-Existing export files are protected by default. Replacement requires the explicit `--overwrite` flag.
+The browser route intentionally has different destination semantics. It writes into a generated private temporary directory, serves the already verified ZIP, and removes the directory after response delivery. The server does not maintain a second durable browser-export repository as part of this feature.
 
 ## Relationship Validation
 
@@ -140,14 +169,30 @@ Before writing an export, the exporter validates owner scope and relationship in
 
 A cross-owner or unresolved relationship fails the export rather than being silently omitted.
 
+## Validation
+
+The disposable Compose gate must prove the browser delivery boundary in addition to the existing command-line/offline verification path. The browser export validation currently checks:
+
+- unauthenticated export refusal;
+- authenticated export refusal when CSRF proof is absent;
+- successful authenticated/CSRF-protected ZIP delivery;
+- ZIP media type and attachment disposition;
+- no-store/no-cache/nosniff response headers;
+- exact agreement between the downloaded archive SHA-256 and the response integrity header;
+- owner identity and expected note content in `library.json`;
+- actual attachment-byte SHA-256 and size in the downloaded ZIP;
+- bundle/library integrity agreement;
+- absence of credential, session, login-rate, and internal attachment-storage fields from serialized portable data; and
+- post-response removal of the generated temporary export directory.
+
 ## Current Boundary
 
-This feature establishes native full-library portability, attachment-byte integrity, and preservation of migration provenance across subsequent native exports. It does not yet provide:
+This feature establishes native full-library portability, a user-facing authenticated browser download, attachment-byte integrity, and preservation of migration provenance across subsequent native exports. It does not yet provide:
 
-- a browser download control;
 - automatic scheduled exports;
 - encrypted export archives;
 - a native re-import command;
+- export background jobs, quotas, or production concurrency limits for very large libraries;
 - an ENEX exporter or importer;
 - production Kopia repository policy;
 - off-host/off-site retention; or
