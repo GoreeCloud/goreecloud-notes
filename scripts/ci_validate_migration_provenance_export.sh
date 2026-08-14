@@ -20,8 +20,8 @@ docker compose exec -T api python -m app.cli verify-library-export \
 grep -F 'Notes: 2' /tmp/goreecloud-notes-memos-import-portable-verify.txt
 grep -F 'Attachments: 1' /tmp/goreecloud-notes-memos-import-portable-verify.txt
 
-# Inspect the portable library and prove the exact source semantics intentionally deferred
-# during native projection are still present as migration provenance.
+# Inspect the portable library and prove the exact normalized source semantics intentionally
+# deferred during native projection are still present as migration provenance.
 docker compose exec -T api python - <<'PY'
 import hashlib
 import json
@@ -56,31 +56,36 @@ with zipfile.ZipFile(path) as archive:
 
     active = records['memos/100']
     assert active['importId'] == migration['id']
-    assert active['sourceUid'] == 'fixture-uid-100'
+    assert active['sourceUid'] == '100'
     assert active['sourceOrder'] == 0
     assert active['sourceRecord']['recordSha256'] == active['recordSha256']
+    assert active['sourceRecord']['source']['state'] == 'normal'
     assert active['sourceRecord']['content']['markdown'] == '# Migration fixture\n\nNative migration inventory.'
     assert active['sourceRecord']['metadata']['color'] == 'blue'
-    assert active['sourceRecord']['metadata']['location'] == {
-        'latitude': 32.3668,
-        'longitude': -86.3,
-        'placeholder': 'Montgomery',
-    }
+    assert active['sourceRecord']['metadata']['location'] is None
     assert active['sourceRecord']['relations'] == [
         {
-            'relatedMemo': 'memos/101',
-            'relatedMemoUid': 'fixture-uid-101',
+            'source': {'memo': 'memos/100', 'order': 0, 'provider': 'memos'},
+            'targetExported': True,
+            'targetSourceMemo': 'memos/101',
             'type': 'REFERENCE',
         }
     ]
 
     trashed = records['memos/101']
     assert trashed['importId'] == migration['id']
+    assert trashed['sourceUid'] == '101'
     assert trashed['sourceOrder'] == 1
     assert trashed['sourceRecord']['recordSha256'] == trashed['recordSha256']
+    assert trashed['sourceRecord']['source']['state'] == 'trash'
+    assert trashed['sourceRecord']['source']['restoreTarget'] == 'archived'
     assert trashed['sourceRecord']['lifecycle']['state'] == 'trashed'
-    assert trashed['sourceRecord']['lifecycle']['sourceState'] == 'TRASH'
     assert trashed['sourceRecord']['lifecycle']['restoreTarget'] == 'archived'
+    assert trashed['sourceRecord']['metadata']['location'] == {
+        'latitude': 0,
+        'longitude': 0,
+        'placeholder': '',
+    }
 
     note_ids = {note['id'] for note in library['notes']}
     assert {record['noteId'] for record in library['migrationNoteRecords']} == note_ids
