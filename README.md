@@ -6,7 +6,7 @@ GoreeCloud Notes is a privacy-first, self-hosted note-taking, knowledge-manageme
 
 **Milestone 0 — Native Foundation is in active development. Production deployment is not approved.**
 
-Draft PR #1 on `feature/native-foundation` contains the current native foundation. The application already has authenticated PostgreSQL-backed note persistence, owner isolation, nested notebook and tag organization, rich structured editing, conflict-safe explicit saves, immutable revision recovery, private attachments with safe raster previews and attachment-ID inline images, indexed PostgreSQL full-text search, note lifecycle controls, a verified full-library native export bundle, a controlled disposable Memos-to-native persistence pipeline with preserved migration provenance, and committed frontend/backend dependency-locking controls. Those implemented capabilities remain development-stage until the remaining production, protected-source migration, backup/recovery, publication, and security gates are closed.
+Draft PR #1 on `feature/native-foundation` contains the current native foundation. The application already has authenticated PostgreSQL-backed note persistence, owner isolation, nested notebook and tag organization, rich structured editing, conflict-safe explicit saves, immutable revision recovery, private attachments with safe raster previews and attachment-ID inline images, indexed PostgreSQL full-text search, note lifecycle controls, a Glaze UI Account & Security workflow, verified full-library native export through both browser and administrative CLI paths, a controlled disposable Memos-to-native persistence pipeline with preserved migration provenance, and committed frontend/backend dependency-locking controls. Those implemented capabilities remain development-stage until the remaining production, protected-source migration, backup/recovery, publication, and security gates are closed.
 
 The native repository is independent from the transitional Memos-based GoreeCloud Notes implementation. `GoreeCloud/memos` remains preserved as a migration source, historical engineering record, and visual reference for the accepted Quick Notes experience until migration and replacement validation are complete.
 
@@ -94,6 +94,7 @@ Implemented foundation work includes:
 - Committed `backend/requirements.lock` constraining the complete reviewed Python runtime/test dependency graph, an exact Setuptools build-backend pin, CI exact-version verification plus `pip check`, and API-image installation through the same constraints file.
 - SQLAlchemy models and reviewed Alembic migration round trips through migration-provenance revision `0006`.
 - Private administrative account creation, salted `scrypt` credentials, opaque database-backed sessions, and CSRF protection.
+- Authenticated Glaze UI Account & Security page with password rotation, the same 12-to-1,024-character password boundary as the backend, global session revocation after credential changes, and a separate-tab launcher that protects unsaved Notes drafts while explicit Save remains active.
 - Explicit owner-scoped authorization and two-user isolation validation.
 - Nested notebooks, normalized tags, richer organization management, pinning, Archive/restore, and recoverable Trash.
 - Application-owned `goreecloud.blocks` structured document format with server-side canonicalization and strict compatibility checks.
@@ -103,16 +104,17 @@ Implemented foundation work includes:
 - Reference-aware attachment deletion protection so current or recoverable historical content does not lose required bytes.
 - Indexed PostgreSQL full-text search with scoped browser integration.
 - Verified native full-library ZIP export that preserves notebooks, notes, tags, relationships, revisions, attachment metadata, attachment bytes, and imported source provenance while excluding credentials, sessions, login-rate state, search indexes, and internal storage paths.
+- Authenticated CSRF-protected browser full-library download using the same verified exporter as the administrative CLI, with no-store/no-cache delivery, archive SHA-256 response evidence, and removal of temporary server-side export files after delivery.
 - Non-destructive transitional Memos export inspection, deterministic provider-neutral manifest generation, and attachment-binary evidence verification.
 - Explicit empty-target native Memos persistence import using only validated manifest/evidence inputs, generated native attachment storage, persistent source provenance, post-import read-only verification, duplicate-import refusal, and cross-user opacity.
 - Native portable export of imported accounts preserves exact migration import checkpoints and normalized source records so deferred source semantics remain portable instead of becoming database-only history.
-- Backend unit tests plus live Compose validation for authentication, workspace, organization, search, revisions, attachments, portability, migration, and destructive disposable database-plus-attachment recovery.
+- Backend unit tests plus live Compose validation for authentication, workspace, organization, search, revisions, attachments, CLI/browser portability, migration, and destructive disposable database-plus-attachment recovery.
 
 The current synthetic migration gate deliberately does not claim complete native semantic equivalence. Exact source Markdown, relations, location metadata, Trash restore targets, and named Memos colors remain preserved in migration provenance when the current native projection does not have an approved equivalent. External-link attachments remain unsupported by the native importer and therefore fail closed.
 
-Milestone 0 remains open for broader production account/recovery UX, PDF/document/SVG preview policy, malware scanning, resumable/large-object and final production storage design, protected-copy Memos attachment extraction and a production-representative migration rehearsal, production Kopia/retention/off-site recovery evidence, selected RPO/RTO, and production-publication/monitoring/trusted-proxy review. Browser/scheduled/encrypted export UX and a native portable re-import path also remain open.
+Milestone 0 remains open for broader production account/recovery UX, PDF/document/SVG preview policy, malware scanning, resumable/large-object and final production storage design, protected-copy Memos attachment extraction and a production-representative migration rehearsal, production Kopia/retention/off-site recovery evidence, selected RPO/RTO, and production-publication/monitoring/trusted-proxy review. Scheduled/encrypted export UX, production export concurrency/large-library policy, and a native portable re-import path also remain open.
 
-See `docs/architecture.md`, `docs/attachments.md`, `docs/revisions.md`, `docs/migration.md`, `docs/portable-export.md`, and `docs/backup-restore.md` for the current technical boundaries.
+See `docs/architecture.md`, `docs/account-security.md`, `docs/attachments.md`, `docs/revisions.md`, `docs/migration.md`, `docs/portable-export.md`, and `docs/backup-restore.md` for the current technical boundaries.
 
 ## Branch Model
 
