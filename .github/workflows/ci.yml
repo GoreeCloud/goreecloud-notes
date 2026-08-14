@@ -42,6 +42,11 @@ jobs:
       - name: Run backend tests
         run: pytest
 
+      - name: Validate read-only Memos export inventory CLI
+        run: |
+          python -m app.migration inspect-memos-export tests/fixtures/memos_export_v1.json --json > /tmp/goreecloud-memos-export-report.json
+          python -c 'import json; report=json.load(open("/tmp/goreecloud-memos-export-report.json")); assert report["validation"]["metadataValid"] is True; assert report["validation"]["sourceMutationPerformed"] is False; assert report["inventory"]["notes"] == 2; assert report["inventory"]["localAttachmentMetadata"] == 1; assert report["validation"]["attachmentBinaryRecoveryRequired"] is True'
+
   frontend:
     name: Frontend lint and build
     runs-on: ubuntu-latest
