@@ -17,14 +17,15 @@
 }
 
 .attachment-heading > div,
-.attachment-row > div {
+.attachment-row > div,
+.attachment-details {
   display: grid;
   min-width: 0;
   gap: 2px;
 }
 
 .attachment-heading span,
-.attachment-row a {
+.attachment-row a:not(.attachment-preview) {
   color: #39455a;
   font-size: 0.84rem;
   font-weight: 760;
@@ -49,12 +50,35 @@
   background: rgba(255, 255, 255, 0.62);
 }
 
-.attachment-row a {
+.attachment-row.previewable {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.attachment-row a:not(.attachment-preview) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   text-decoration-thickness: 1px;
   text-underline-offset: 3px;
+}
+
+.attachment-preview {
+  display: block;
+  width: 72px;
+  height: 54px;
+  overflow: hidden;
+  border: 1px solid rgba(126, 145, 169, 0.16);
+  border-radius: 9px;
+  background: rgba(227, 233, 242, 0.72);
+}
+
+.attachment-preview img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .attachment-row button,
@@ -96,6 +120,20 @@
     align-items: flex-start;
   }
 
+  .attachment-row.previewable {
+    grid-template-columns: 58px minmax(0, 1fr);
+  }
+
+  .attachment-row.previewable > button {
+    grid-column: 2;
+    justify-self: end;
+  }
+
+  .attachment-preview {
+    width: 58px;
+    height: 46px;
+  }
+
   .attachment-row span {
     max-width: 190px;
     overflow: hidden;
@@ -106,7 +144,8 @@
 
 @media (prefers-color-scheme: dark) {
   .attachment-panel,
-  .attachment-row {
+  .attachment-row,
+  .attachment-preview {
     border-color: rgba(206, 220, 240, 0.1);
   }
 
@@ -118,8 +157,12 @@
     background: rgba(39, 50, 67, 0.58);
   }
 
+  .attachment-preview {
+    background: rgba(25, 34, 47, 0.88);
+  }
+
   .attachment-heading span,
-  .attachment-row a {
+  .attachment-row a:not(.attachment-preview) {
     color: #dce4f0;
   }
 
