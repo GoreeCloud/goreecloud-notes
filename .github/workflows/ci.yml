@@ -146,6 +146,9 @@ jobs:
       - name: Validate private attachment storage and authorization
         run: bash scripts/ci_validate_attachments.sh
 
+      - name: Validate disposable database and attachment backup/restore
+        run: bash scripts/ci_validate_backup_restore.sh
+
       - name: Capture Compose diagnostics
         if: always()
         run: |
