@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import getpass
+import json
 import sys
 from pathlib import Path
 
@@ -13,6 +14,7 @@ from .auth import hash_password, normalize_username, replace_user_password, vali
 from .config import get_settings
 from .database import SessionLocal
 from .models import User, UserCredential
+from .native_import import NativeImportError, import_native_library
 from .portability import ExportError, verify_export_bundle
 from .portability_migration import export_user_library_with_provenance
 
@@ -112,6 +114,48 @@ def export_library(*, username: str, output: str, overwrite: bool) -> None:
     print(f"Attachments: {result.attachment_count}")
 
 
+def import_library(*, username: str, input_path: str, confirm_empty_target: bool, json_output: bool) -> None:
+    """Reconstruct a verified native bundle into one explicitly empty existing account."""
+
+    if not confirm_empty_target:
+        raise ValueError(
+            "Native re-import requires --confirm-empty-target; merging into an existing library is not supported."
+        )
+    normalized = normalize_username(username)
+    if not normalized:
+        raise ValueError("Username must not be empty.")
+
+    settings = get_settings()
+    with SessionLocal() as db:
+        user = db.scalar(select(User).where(User.username_normalized == normalized))
+        if user is None:
+            raise ValueError("Account not found; create the empty target account before native re-import.")
+
+        result = import_native_library(
+            db,
+            owner=user,
+            input_path=Path(input_path),
+            attachment_root=Path(settings.attachment_root),
+        )
+
+    if json_output:
+        print(json.dumps(result, ensure_ascii=False, sort_keys=True, separators=(",", ":")))
+        return
+
+    counts = result["counts"]
+    source = result["source"]
+    target = result["target"]
+    print(f"Imported verified GoreeCloud Notes library into: {target['username']}")
+    print(f"Source account: {source['username']}")
+    print(f"Source bundle SHA-256: {source['bundleSha256']}")
+    print(f"Notebooks: {counts['notebooks']}")
+    print(f"Notes: {counts['notes']}")
+    print(f"Tags: {counts['tags']}")
+    print(f"Attachments: {counts['attachments']}")
+    print(f"Revisions: {counts['revisions']}")
+    print(f"Migration provenance records: {counts['migrationNoteRecords']}")
+
+
 def verify_library_export(*, input_path: str) -> None:
     """Verify an existing native library export without connecting to PostgreSQL."""
 
@@ -165,6 +209,27 @@ def build_parser() -> argparse.ArgumentParser:
         help="Explicitly allow replacement when the destination file already exists.",
     )
 
+    import_bundle = subparsers.add_parser(
+        "import-library",
+        help=(
+            "Reconstruct a verified native full-library ZIP into an existing empty account. "
+            "This is a restore/import path, not a merge operation."
+        ),
+    )
+    import_bundle.add_argument("--username", required=True, help="Existing empty target account.")
+    import_bundle.add_argument("--input", required=True, dest="input_path", help="Verified native ZIP path.")
+    import_bundle.add_argument(
+        "--confirm-empty-target",
+        action="store_true",
+        help="Explicitly confirm that the selected target account is intended to be empty and replaced by the import.",
+    )
+    import_bundle.add_argument(
+        "--json",
+        action="store_true",
+        dest="json_output",
+        help="Emit the import result as machine-readable JSON.",
+    )
+
     verify = subparsers.add_parser(
         "verify-library-export",
         help="Verify the structure and SHA-256 integrity of a native GoreeCloud Notes export bundle.",
@@ -195,11 +260,18 @@ def main() -> int:
                 output=args.output,
                 overwrite=args.overwrite,
             )
+        elif args.command == "import-library":
+            import_library(
+                username=args.username,
+                input_path=args.input_path,
+                confirm_empty_target=args.confirm_empty_target,
+                json_output=args.json_output,
+            )
         elif args.command == "verify-library-export":
             verify_library_export(input_path=args.input_path)
         else:
             parser.error("Unsupported command.")
-    except (ValueError, ExportError) as exc:
+    except (ValueError, ExportError, NativeImportError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
 
