@@ -1,13 +1,63 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { Node } from "@tiptap/core";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 
+import {
+  attachmentPreviewUrl,
+  isAttachmentPreviewable,
+  listAttachments,
+  type Attachment,
+} from "./api";
 import {
   goreeToTiptap,
   tiptapToGoree,
   type NoteDocument,
   type TiptapNode,
 } from "./document";
+
+const AttachmentImage = Node.create({
+  name: "attachmentImage",
+  group: "block",
+  atom: true,
+  draggable: true,
+  selectable: true,
+
+  addAttributes() {
+    return {
+      attachmentId: {
+        default: "",
+        parseHTML: (element) => element.getAttribute("data-attachment-id") ?? "",
+      },
+      alt: {
+        default: "",
+        parseHTML: (element) => element.getAttribute("alt") ?? "",
+      },
+    };
+  },
+
+  parseHTML() {
+    return [{ tag: "img[data-goree-attachment-image]" }];
+  },
+
+  renderHTML({ HTMLAttributes }) {
+    const attachmentId = typeof HTMLAttributes.attachmentId === "string"
+      ? HTMLAttributes.attachmentId
+      : "";
+    const alt = typeof HTMLAttributes.alt === "string" ? HTMLAttributes.alt : "";
+    return [
+      "img",
+      {
+        "data-goree-attachment-image": "true",
+        "data-attachment-id": attachmentId,
+        src: attachmentPreviewUrl(attachmentId),
+        alt,
+        loading: "lazy",
+        referrerpolicy: "no-referrer",
+      },
+    ];
+  },
+});
 
 type RichNoteEditorProps = {
   noteId: string;
@@ -38,11 +88,16 @@ function ToolbarButton({ label, active = false, disabled = false, onClick }: Too
 }
 
 export function RichNoteEditor({ noteId, value, disabled = false, onChange }: RichNoteEditorProps) {
+  const [imageAttachments, setImageAttachments] = useState<Attachment[]>([]);
+  const [selectedImageId, setSelectedImageId] = useState("");
+  const [attachmentStatus, setAttachmentStatus] = useState("");
+
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
         heading: { levels: [1, 2, 3] },
       }),
+      AttachmentImage,
     ],
     content: goreeToTiptap(value),
     immediatelyRender: false,
@@ -58,6 +113,40 @@ export function RichNoteEditor({ noteId, value, disabled = false, onChange }: Ri
       onChange(tiptapToGoree(activeEditor.getJSON() as TiptapNode));
     },
   });
+
+  async function refreshImageAttachments() {
+    try {
+      const attachments = (await listAttachments(noteId)).filter(isAttachmentPreviewable);
+      setImageAttachments(attachments);
+      setSelectedImageId((current) => attachments.some((item) => item.id === current) ? current : "");
+      setAttachmentStatus("");
+    } catch (error) {
+      setImageAttachments([]);
+      setSelectedImageId("");
+      setAttachmentStatus(error instanceof Error ? error.message : "Unable to refresh image attachments.");
+    }
+  }
+
+  useEffect(() => {
+    let cancelled = false;
+    void listAttachments(noteId)
+      .then((attachments) => {
+        if (cancelled) return;
+        const images = attachments.filter(isAttachmentPreviewable);
+        setImageAttachments(images);
+        setSelectedImageId("");
+        setAttachmentStatus("");
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        setImageAttachments([]);
+        setSelectedImageId("");
+        setAttachmentStatus(error instanceof Error ? error.message : "Unable to load image attachments.");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [noteId]);
 
   useEffect(() => {
     if (!editor) {
@@ -80,6 +169,26 @@ export function RichNoteEditor({ noteId, value, disabled = false, onChange }: Ri
 
   if (!editor) {
     return <div className="rich-editor-loading">Preparing editor…</div>;
+  }
+
+  const selectedImage = imageAttachments.find((attachment) => attachment.id === selectedImageId) ?? null;
+
+  function insertSelectedImage() {
+    if (!selectedImage || disabled) return;
+    editor
+      .chain()
+      .focus()
+      .insertContent([
+        {
+          type: "attachmentImage",
+          attrs: {
+            attachmentId: selectedImage.id,
+            alt: selectedImage.filename,
+          },
+        },
+        { type: "paragraph" },
+      ])
+      .run();
   }
 
   return (
@@ -150,6 +259,25 @@ export function RichNoteEditor({ noteId, value, disabled = false, onChange }: Ri
           onClick={() => editor.chain().focus().setHorizontalRule().run()}
         />
         <span className="rich-toolbar-separator" aria-hidden="true" />
+        <select
+          className="rich-toolbar-select"
+          aria-label="Inline image attachment"
+          value={selectedImageId}
+          disabled={disabled || imageAttachments.length === 0}
+          onFocus={() => void refreshImageAttachments()}
+          onChange={(event) => setSelectedImageId(event.target.value)}
+        >
+          <option value="">{imageAttachments.length === 0 ? "No image attachments" : "Choose image"}</option>
+          {imageAttachments.map((attachment) => (
+            <option value={attachment.id} key={attachment.id}>{attachment.filename}</option>
+          ))}
+        </select>
+        <ToolbarButton
+          label="Insert image"
+          disabled={disabled || selectedImage === null}
+          onClick={insertSelectedImage}
+        />
+        <span className="rich-toolbar-separator" aria-hidden="true" />
         <ToolbarButton
           label="Undo"
           disabled={disabled || !editor.can().chain().focus().undo().run()}
@@ -161,6 +289,7 @@ export function RichNoteEditor({ noteId, value, disabled = false, onChange }: Ri
           onClick={() => editor.chain().focus().redo().run()}
         />
       </div>
+      {attachmentStatus ? <div className="rich-toolbar-status" role="status">{attachmentStatus}</div> : null}
       <EditorContent editor={editor} />
     </div>
   );
