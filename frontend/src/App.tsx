@@ -21,6 +21,7 @@ import {
   login as loginRequest,
   logout as logoutRequest,
   removeNoteTag,
+  searchNotes,
   trashNote,
   updateNote,
   uploadAttachment,
@@ -106,6 +107,9 @@ function App() {
   const [editorDocument, setEditorDocument] = useState<NoteDocument>(() => emptyDocument());
   const [editorNotebookId, setEditorNotebookId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [searchResults, setSearchResults] = useState<Note[] | null>(null);
+  const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState("");
   const [busy, setBusy] = useState(false);
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
   const [error, setError] = useState("");
@@ -120,10 +124,9 @@ function App() {
   const conflict = saveState === "Conflict";
 
   const visibleNotes = useMemo(() => {
-    const query = search.trim().toLocaleLowerCase();
-    if (!query) return notes;
-    return notes.filter((note) => `${note.title}\n${documentToText(note.document)}`.toLocaleLowerCase().includes(query));
-  }, [notes, search]);
+    if (!search.trim()) return notes;
+    return searchResults ?? [];
+  }, [notes, search, searchResults]);
 
   const currentNotebook = view === "notebook" ? notebooks.find((item) => item.id === filterId) ?? null : null;
   const currentTag = view === "tag" ? tags.find((item) => item.id === filterId) ?? null : null;
@@ -175,6 +178,9 @@ function App() {
     setNotes(loadedNotes);
     setNotebooks(loadedNotebooks);
     setTags(loadedTags);
+    setSearch("");
+    setSearchResults(null);
+    setSearchError("");
     setAuthState("authenticated");
     await openNote(loadedNotes[0] ?? null);
   }
@@ -210,10 +216,53 @@ function App() {
     return () => { cancelled = true; };
   }, []);
 
+  useEffect(() => {
+    const query = search.trim();
+    if (authState !== "authenticated" || managementView || !query) {
+      setSearchResults(null);
+      setSearching(false);
+      setSearchError("");
+      return;
+    }
+
+    let cancelled = false;
+    setSearchResults([]);
+    setSearching(true);
+    setSearchError("");
+    const timeout = window.setTimeout(() => {
+      void searchNotes({
+        query,
+        state: noteState,
+        notebookId: view === "notebook" ? filterId : null,
+        tagId: view === "tag" ? filterId : null,
+      })
+        .then((results) => {
+          if (!cancelled) setSearchResults(results);
+        })
+        .catch((caught) => {
+          if (!cancelled) {
+            setSearchResults([]);
+            setSearchError(messageFromError(caught));
+          }
+        })
+        .finally(() => {
+          if (!cancelled) setSearching(false);
+        });
+    }, 250);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeout);
+    };
+  }, [authState, filterId, managementView, noteState, search, view]);
+
   async function changeView(nextView: WorkspaceView, nextFilterId: string | null = null) {
     setView(nextView);
     setFilterId(nextFilterId);
     setSearch("");
+    setSearchResults(null);
+    setSearching(false);
+    setSearchError("");
     setError("");
     if (nextView === "notebooks" || nextView === "tags") {
       applyEditorNote(null);
@@ -237,6 +286,9 @@ function App() {
   async function handleCreateNote() {
     setBusy(true);
     setError("");
+    setSearch("");
+    setSearchResults(null);
+    setSearchError("");
     try {
       const note = await createNote(view === "notebook" ? filterId : null);
       if (view === "tag" && filterId) await assignNoteTag(note.id, filterId);
@@ -262,6 +314,7 @@ function App() {
     try {
       const updated = await updateNote(selectedNote.id, { title, document: editorDocument, notebook_id: editorNotebookId, expected_content_version: selectedNote.content_version });
       setNotes((current) => current.map((note) => note.id === updated.id ? updated : note));
+      setSearchResults((current) => current?.map((note) => note.id === updated.id ? updated : note) ?? null);
       setTitle(updated.title);
       setEditorDocument(updated.document);
       setEditorNotebookId(updated.notebook_id);
@@ -284,6 +337,7 @@ function App() {
     try {
       const current = await getNote(selectedNote.id);
       setNotes((items) => items.map((note) => note.id === current.id ? current : note));
+      setSearchResults((items) => items?.map((note) => note.id === current.id ? current : note) ?? null);
       applyEditorNote(current);
       await loadNoteRelations(current.id);
     } catch (caught) { setError(messageFromError(caught)); }
@@ -316,7 +370,7 @@ function App() {
   async function handleTrash() {
     if (!selectedNote) return;
     setBusy(true); setError("");
-    try { await trashNote(selectedNote.id); const remaining = notes.filter((note) => note.id !== selectedNote.id); setNotes(remaining); await openNote(remaining[0] ?? null); }
+    try { await trashNote(selectedNote.id); const remaining = notes.filter((note) => note.id !== selectedNote.id); setNotes(remaining); setSearchResults((current) => current?.filter((note) => note.id !== selectedNote.id) ?? null); await openNote(remaining[0] ?? null); }
     catch (caught) { setError(messageFromError(caught)); }
     finally { setBusy(false); }
   }
@@ -324,7 +378,7 @@ function App() {
   async function handleStateChange(state: NoteState) {
     if (!selectedNote) return;
     setBusy(true); setError("");
-    try { await updateNote(selectedNote.id, { state }); const remaining = notes.filter((note) => note.id !== selectedNote.id); setNotes(remaining); await openNote(remaining[0] ?? null); }
+    try { await updateNote(selectedNote.id, { state }); const remaining = notes.filter((note) => note.id !== selectedNote.id); setNotes(remaining); setSearchResults((current) => current?.filter((note) => note.id !== selectedNote.id) ?? null); await openNote(remaining[0] ?? null); }
     catch (caught) { setError(messageFromError(caught)); }
     finally { setBusy(false); }
   }
@@ -332,7 +386,7 @@ function App() {
   async function handlePinToggle() {
     if (!selectedNote) return;
     setBusy(true); setError("");
-    try { const updated = await updateNote(selectedNote.id, { is_pinned: !selectedNote.is_pinned }); setNotes((current) => current.map((note) => note.id === updated.id ? updated : note).sort((left, right) => Number(right.is_pinned) - Number(left.is_pinned))); }
+    try { const updated = await updateNote(selectedNote.id, { is_pinned: !selectedNote.is_pinned }); setNotes((current) => current.map((note) => note.id === updated.id ? updated : note).sort((left, right) => Number(right.is_pinned) - Number(left.is_pinned))); setSearchResults((current) => current?.map((note) => note.id === updated.id ? updated : note).sort((left, right) => Number(right.is_pinned) - Number(left.is_pinned)) ?? null); }
     catch (caught) { setError(messageFromError(caught)); }
     finally { setBusy(false); }
   }
@@ -342,7 +396,7 @@ function App() {
     setBusy(true); setError("");
     const assigned = activeNoteTags.some((item) => item.id === tag.id);
     try {
-      if (assigned) { await removeNoteTag(selectedNote.id, tag.id); setActiveNoteTags((current) => current.filter((item) => item.id !== tag.id)); }
+      if (assigned) { await removeNoteTag(selectedNote.id, tag.id); setActiveNoteTags((current) => current.filter((item) => item.id !== tag.id)); if (view === "tag" && filterId === tag.id) setSearchResults((current) => current?.filter((note) => note.id !== selectedNote.id) ?? null); }
       else { await assignNoteTag(selectedNote.id, tag.id); setActiveNoteTags((current) => [...current, tag].sort((a, b) => a.name.localeCompare(b.name))); }
     } catch (caught) { setError(messageFromError(caught)); }
     finally { setBusy(false); }
@@ -380,7 +434,7 @@ function App() {
 
   async function handleLogout() {
     setBusy(true); setError("");
-    try { await logoutRequest(); setUser(null); setNotes([]); setNotebooks([]); setTags([]); applyEditorNote(null); setAuthState("unauthenticated"); }
+    try { await logoutRequest(); setUser(null); setNotes([]); setNotebooks([]); setTags([]); setSearch(""); setSearchResults(null); setSearchError(""); applyEditorNote(null); setAuthState("unauthenticated"); }
     catch (caught) { setError(messageFromError(caught)); }
     finally { setBusy(false); }
   }
@@ -408,14 +462,15 @@ function App() {
       </aside>
 
       <section className="note-list-pane" aria-label={managementView ? paneTitle : "Notes"}>
-        <header className="pane-header"><div><p className="eyebrow">{paneEyebrow}</p><h1>{paneTitle}</h1></div>{!managementView ? <span className="note-count">{notes.length}</span> : null}</header>
+        <header className="pane-header"><div><p className="eyebrow">{paneEyebrow}</p><h1>{paneTitle}</h1></div>{!managementView ? <span className="note-count">{search.trim() ? visibleNotes.length : notes.length}</span> : null}</header>
         {error ? <p className="workspace-error" role="alert">{error}</p> : null}
+        {searchError ? <p className="workspace-error" role="alert">Search failed: {searchError}</p> : null}
         {view === "notebooks" ? (
           <div className="manager-stack"><form className="manager-create" onSubmit={handleCreateNotebook}><input aria-label="New notebook name" placeholder="New notebook" value={newNotebookName} onChange={(event) => setNewNotebookName(event.target.value)} required /><select aria-label="Parent notebook" value={newNotebookParent} onChange={(event) => setNewNotebookParent(event.target.value)}><option value="">No parent</option>{notebooks.map((notebook) => <option value={notebook.id} key={notebook.id}>{notebook.name}</option>)}</select><button className="primary-button" type="submit" disabled={busy}>Create notebook</button></form><div className="manager-list">{notebooks.map((notebook) => <article className="manager-row" key={notebook.id}><div><strong>{notebook.name}</strong><span>{notebook.parent_id ? "Nested notebook" : "Top-level notebook"}</span></div><div className="manager-actions"><button type="button" onClick={() => void changeView("notebook", notebook.id)}>Open</button><button type="button" onClick={() => void handleDeleteNotebook(notebook)} disabled={busy}>Delete</button></div></article>)}{notebooks.length === 0 ? <div className="empty-list"><strong>No notebooks yet</strong><span>Create a notebook to organize related notes.</span></div> : null}</div></div>
         ) : view === "tags" ? (
           <div className="manager-stack"><form className="manager-create" onSubmit={handleCreateTag}><input aria-label="New tag name" placeholder="New tag" value={newTagName} onChange={(event) => setNewTagName(event.target.value)} required /><button className="primary-button" type="submit" disabled={busy}>Create tag</button></form><div className="manager-list">{tags.map((tag) => <article className="manager-row" key={tag.id}><div><strong>#{tag.name}</strong><span>Private organizational tag</span></div><div className="manager-actions"><button type="button" onClick={() => void changeView("tag", tag.id)}>Open</button><button type="button" onClick={() => void handleDeleteTag(tag)} disabled={busy}>Delete</button></div></article>)}{tags.length === 0 ? <div className="empty-list"><strong>No tags yet</strong><span>Create tags for flexible organization across notebooks.</span></div> : null}</div></div>
         ) : (
-          <><label className="search-box"><span aria-hidden="true">⌕</span><input type="search" placeholder="Search loaded notes" aria-label="Search notes" value={search} onChange={(event) => setSearch(event.target.value)} /></label>{noteState === "normal" ? <button className="quick-capture" type="button" onClick={handleCreateNote} disabled={busy}><span>Take a note…</span><span className="quick-actions" aria-hidden="true">＋</span></button> : null}<div className="notes-stack">{visibleNotes.map((note) => <button className={`note-card${note.id === selectedId ? " selected" : ""}`} type="button" key={note.id} onClick={() => void openNote(note)}><div className="note-card-heading"><h2>{note.title || "Untitled"}</h2>{note.is_pinned ? <span title="Pinned" aria-label="Pinned">●</span> : null}</div><p>{documentToText(note.document) || "Empty note"}</p><small>{new Date(note.updated_at).toLocaleString()}</small></button>)}{visibleNotes.length === 0 ? <div className="empty-list"><strong>{notes.length === 0 ? `No ${paneTitle.toLocaleLowerCase()} notes` : "No matching notes"}</strong><span>{notes.length === 0 ? "Nothing is stored in this view yet." : "Try another search."}</span></div> : null}</div></>
+          <><label className="search-box"><span aria-hidden="true">⌕</span><input type="search" maxLength={200} placeholder="Search notes" aria-label="Search notes" value={search} onChange={(event) => setSearch(event.target.value)} /></label>{noteState === "normal" ? <button className="quick-capture" type="button" onClick={handleCreateNote} disabled={busy}><span>Take a note…</span><span className="quick-actions" aria-hidden="true">＋</span></button> : null}<div className="notes-stack">{visibleNotes.map((note) => <button className={`note-card${note.id === selectedId ? " selected" : ""}`} type="button" key={note.id} onClick={() => void openNote(note)}><div className="note-card-heading"><h2>{note.title || "Untitled"}</h2>{note.is_pinned ? <span title="Pinned" aria-label="Pinned">●</span> : null}</div><p>{documentToText(note.document) || "Empty note"}</p><small>{new Date(note.updated_at).toLocaleString()}</small></button>)}{visibleNotes.length === 0 ? <div className="empty-list"><strong>{searching ? "Searching…" : search.trim() ? "No matching notes" : `No ${paneTitle.toLocaleLowerCase()} notes`}</strong><span>{searching ? "Searching the private PostgreSQL index." : search.trim() ? "Try another search. Phrase and web-style queries are supported." : "Nothing is stored in this view yet."}</span></div> : null}</div></>
         )}
         <footer className="mobile-source-footer"><span>AGPL-3.0-only</span><span aria-hidden="true"> · </span><SourceLink /></footer>
       </section>
