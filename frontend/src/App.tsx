@@ -15,12 +15,14 @@ import {
   getNote,
   listAttachments,
   listNotebooks,
+  listNoteRevisions,
   listNotes,
   listNoteTags,
   listTags,
   login as loginRequest,
   logout as logoutRequest,
   removeNoteTag,
+  restoreNoteRevision,
   searchNotes,
   trashNote,
   updateNote,
@@ -29,6 +31,7 @@ import {
   type CurrentUser,
   type Note,
   type Notebook,
+  type NoteRevision,
   type NoteState,
   type Tag,
 } from "./api";
@@ -100,6 +103,7 @@ function App() {
   const [tags, setTags] = useState<Tag[]>([]);
   const [activeNoteTags, setActiveNoteTags] = useState<Tag[]>([]);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [revisions, setRevisions] = useState<NoteRevision[]>([]);
   const [view, setView] = useState<WorkspaceView>("home");
   const [filterId, setFilterId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -143,6 +147,7 @@ function App() {
       setEditorNotebookId(null);
       setActiveNoteTags([]);
       setAttachments([]);
+      setRevisions([]);
       setSaveState("Saved");
       return;
     }
@@ -154,9 +159,14 @@ function App() {
   }
 
   async function loadNoteRelations(noteId: string) {
-    const [assignedTags, noteAttachments] = await Promise.all([listNoteTags(noteId), listAttachments(noteId)]);
+    const [assignedTags, noteAttachments, noteRevisions] = await Promise.all([
+      listNoteTags(noteId),
+      listAttachments(noteId),
+      listNoteRevisions(noteId),
+    ]);
     setActiveNoteTags(assignedTags);
     setAttachments(noteAttachments);
+    setRevisions(noteRevisions);
   }
 
   async function openNote(note: Note | null) {
@@ -168,6 +178,7 @@ function App() {
     } catch (caught) {
       setActiveNoteTags([]);
       setAttachments([]);
+      setRevisions([]);
       setError(messageFromError(caught));
     }
   }
@@ -200,10 +211,15 @@ function App() {
         const first = loadedNotes[0] ?? null;
         applyEditorNote(first);
         if (first) {
-          const [assignedTags, noteAttachments] = await Promise.all([listNoteTags(first.id), listAttachments(first.id)]);
+          const [assignedTags, noteAttachments, noteRevisions] = await Promise.all([
+            listNoteTags(first.id),
+            listAttachments(first.id),
+            listNoteRevisions(first.id),
+          ]);
           if (!cancelled) {
             setActiveNoteTags(assignedTags);
             setAttachments(noteAttachments);
+            setRevisions(noteRevisions);
           }
         }
       } catch (caught) {
@@ -318,6 +334,7 @@ function App() {
       setTitle(updated.title);
       setEditorDocument(updated.document);
       setEditorNotebookId(updated.notebook_id);
+      setRevisions(await listNoteRevisions(updated.id));
       setSaveState("Saved");
     } catch (caught) {
       if (caught instanceof ApiError && caught.status === 409) {
@@ -342,6 +359,26 @@ function App() {
       await loadNoteRelations(current.id);
     } catch (caught) { setError(messageFromError(caught)); }
     finally { setBusy(false); }
+  }
+
+  async function handleRevisionRestore(revision: NoteRevision) {
+    if (!selectedNote || dirty || conflict) return;
+    setBusy(true);
+    setError("");
+    try {
+      const restored = await restoreNoteRevision(selectedNote.id, revision.id, selectedNote.content_version);
+      setNotes((items) => items.map((note) => note.id === restored.id ? restored : note));
+      setSearchResults((items) => items?.map((note) => note.id === restored.id ? restored : note) ?? null);
+      applyEditorNote(restored);
+      await loadNoteRelations(restored.id);
+    } catch (caught) {
+      if (caught instanceof ApiError && caught.status === 409) {
+        setSaveState("Conflict");
+        setError("This note changed somewhere else. The historical revision was not restored. Reload the current server version before retrying.");
+      } else {
+        setError(messageFromError(caught));
+      }
+    } finally { setBusy(false); }
   }
 
   async function handleAttachmentUpload(event: ChangeEvent<HTMLInputElement>) {
@@ -483,7 +520,8 @@ function App() {
           <article className="editor-surface live-editor"><p className="eyebrow">Private note</p><input className="title-input" aria-label="Note title" placeholder="Untitled" value={title} onChange={(event) => setTitle(event.target.value)} disabled={conflict} />
             <div className="note-metadata-controls"><label><span>Notebook</span><select value={editorNotebookId ?? ""} onChange={(event) => setEditorNotebookId(event.target.value || null)} disabled={conflict}><option value="">Unfiled</option>{notebooks.map((notebook) => <option value={notebook.id} key={notebook.id}>{notebook.name}</option>)}</select></label><div className="tag-assignment" aria-label="Note tags"><span>Tags</span><div className="tag-chip-list">{tags.map((tag) => { const assigned = activeNoteTags.some((item) => item.id === tag.id); return <button className={`tag-chip${assigned ? " assigned" : ""}`} type="button" aria-pressed={assigned} key={tag.id} onClick={() => void handleTagToggle(tag)} disabled={busy || conflict}>#{tag.name}</button>; })}{tags.length === 0 ? <span className="no-tags">No tags created</span> : null}</div></div></div>
             <section className="attachment-panel" aria-labelledby="attachment-heading"><div className="attachment-heading"><div><span id="attachment-heading">Attachments</span><small>{attachments.length} file{attachments.length === 1 ? "" : "s"}</small></div><label className="attachment-upload"><span>{uploadingAttachment ? "Uploading…" : "Add file"}</span><input type="file" onChange={handleAttachmentUpload} disabled={uploadingAttachment || conflict} /></label></div><div className="attachment-list">{attachments.map((attachment) => <div className="attachment-row" key={attachment.id}><div><a href={attachmentDownloadUrl(attachment.id)}>{attachment.filename}</a><span>{formatBytes(attachment.size_bytes)} · {attachment.media_type}</span></div><button type="button" onClick={() => void handleAttachmentDelete(attachment)} disabled={uploadingAttachment || conflict}>Remove</button></div>)}{attachments.length === 0 ? <span className="attachment-empty">No files attached.</span> : null}</div></section>
-            <p className="editor-meta">Structured GoreeCloud document · content version {selectedNote.content_version}</p><RichNoteEditor noteId={selectedNote.id} value={editorDocument} onChange={setEditorDocument} disabled={busy || conflict} /><div className="callout foundation-callout"><strong>{conflict ? "Conflict protection is active" : "Native rich editing is active"}</strong><span>{conflict ? "The local editor is locked until you reload the current server version, preventing a stale draft from overwriting newer content." : "Rich text is converted through the GoreeCloud-owned document contract and saved with optimistic concurrency protection. Attachments use separate owner-authorized byte storage."}</span></div></article></>
+            <section className="attachment-panel" aria-labelledby="history-heading"><div className="attachment-heading"><div><span id="history-heading">History</span><small>{revisions.length} recoverable revision{revisions.length === 1 ? "" : "s"}</small></div></div><div className="attachment-list">{revisions.map((revision) => <div className="attachment-row" key={revision.id}><div><strong>Revision {revision.revision_number} · {revision.title || "Untitled"}</strong><span>{new Date(revision.created_at).toLocaleString()} · content version {revision.content_version}</span><span>{documentToText(revision.document).slice(0, 120) || "Empty note"}</span>{revision.change_summary ? <span>{revision.change_summary}</span> : null}</div><button type="button" onClick={() => void handleRevisionRestore(revision)} disabled={busy || dirty || conflict}>Restore</button></div>)}{revisions.length === 0 ? <span className="attachment-empty">No historical revisions yet. A revision is created before eligible content changes.</span> : null}</div><p className="editor-meta">Restoring creates a new content version and preserves the current content as history. Notebook, tags, state, pinning, color, and attachments are not changed.</p></section>
+            <p className="editor-meta">Structured GoreeCloud document · content version {selectedNote.content_version}</p><RichNoteEditor noteId={selectedNote.id} value={editorDocument} onChange={setEditorDocument} disabled={busy || conflict} /><div className="callout foundation-callout"><strong>{conflict ? "Conflict protection is active" : "Native rich editing is active"}</strong><span>{conflict ? "The local editor is locked until you reload the current server version, preventing a stale draft from overwriting newer content." : "Rich text is converted through the GoreeCloud-owned document contract and saved with optimistic concurrency protection. Attachments use separate owner-authorized byte storage, and historical content can be restored without rewriting revision history."}</span></div></article></>
         ) : (
           <div className="empty-editor"><p className="eyebrow">GoreeCloud Notes</p><h2>{noteState === "normal" ? "Your private workspace is ready." : `No note selected in ${paneTitle}.`}</h2><p>{noteState === "normal" ? "Create a note to begin building your knowledge library." : "Choose a note from the list or return to Home."}</p>{noteState === "normal" ? <button className="primary-button" type="button" onClick={handleCreateNote} disabled={busy}>Create first note</button> : null}</div>
         )}
