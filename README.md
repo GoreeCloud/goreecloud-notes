@@ -6,7 +6,7 @@ GoreeCloud Notes is a privacy-first, self-hosted note-taking, knowledge-manageme
 
 **Milestone 0 — Native Foundation is in active development. Production deployment is not approved.**
 
-Draft PR #1 on `feature/native-foundation` contains the current native foundation. The application already has authenticated PostgreSQL-backed note persistence, owner isolation, nested notebook and tag organization, rich structured editing, conflict-safe explicit saves, immutable revision recovery, private attachments with safe raster previews and attachment-ID inline images, indexed PostgreSQL full-text search, note lifecycle controls, and a persistent Glaze UI. Those implemented capabilities remain development-stage until the remaining production, migration, backup/recovery, dependency, and security gates are closed.
+Draft PR #1 on `feature/native-foundation` contains the current native foundation. The application already has authenticated PostgreSQL-backed note persistence, owner isolation, nested notebook and tag organization, rich structured editing, conflict-safe explicit saves, immutable revision recovery, private attachments with safe raster previews and attachment-ID inline images, indexed PostgreSQL full-text search, note lifecycle controls, a verified full-library native export bundle, and a persistent Glaze UI. Those implemented capabilities remain development-stage until the remaining production, migration, backup/recovery, dependency, and security gates are closed.
 
 The native repository is independent from the transitional Memos-based GoreeCloud Notes implementation. `GoreeCloud/memos` remains preserved as a migration source, historical engineering record, and visual reference for the accepted Quick Notes experience until migration and replacement validation are complete.
 
@@ -62,7 +62,7 @@ goreecloud-notes/
 ├── frontend/                 # React/TypeScript/Vite web application
 ├── backend/                  # FastAPI application and tests
 ├── docker/                   # Container/deployment support
-├── docs/                     # Architecture, attachment, recovery, development, and migration records
+├── docs/                     # Architecture, attachment, recovery, development, migration, and portability records
 ├── tests/                    # Cross-component and future end-to-end tests
 ├── scripts/                  # Versioned live integration validation
 ├── .github/workflows/        # Continuous integration
@@ -101,11 +101,13 @@ Implemented foundation work includes:
 - Private attachment byte storage, integrity checks, safe raster previews, and attachment-ID inline raster images.
 - Reference-aware attachment deletion protection so current or recoverable historical content does not lose required bytes.
 - Indexed PostgreSQL full-text search with scoped browser integration.
-- Backend unit tests plus live Compose validation for authentication, workspace, organization, search, revisions, and attachments.
+- Verified native full-library ZIP export that preserves notebooks, notes, tags, relationships, revisions, attachment metadata, and attachment bytes while excluding credentials, sessions, login-rate state, search indexes, and internal storage paths.
+- Non-destructive transitional Memos migration inspection, manifest generation, and attachment-binary evidence verification.
+- Backend unit tests plus live Compose validation for authentication, workspace, organization, search, revisions, attachments, portability, and destructive disposable database-plus-attachment recovery.
 
-Milestone 0 remains open for final dependency-locking decisions, broader production authentication/recovery hardening, PDF/document/SVG preview policy, malware scanning, resumable/large-object and final production storage design, migration tooling, backup/restore validation, and production-publication review.
+Milestone 0 remains open for final Python dependency locking, broader production account/recovery UX, PDF/document/SVG preview policy, malware scanning, resumable/large-object and final production storage design, the native persistence importer and isolated migration-equivalence dry run, production Kopia/retention/off-site recovery evidence, and production-publication review.
 
-See `docs/architecture.md`, `docs/attachments.md`, `docs/revisions.md`, and `docs/migration.md` for the current technical boundaries.
+See `docs/architecture.md`, `docs/attachments.md`, `docs/revisions.md`, `docs/migration.md`, `docs/portable-export.md`, and `docs/backup-restore.md` for the current technical boundaries.
 
 ## Branch Model
 
