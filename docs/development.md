@@ -29,6 +29,8 @@ pytest
 python -m compileall -q app migrations
 ```
 
+`/health` is the dependency-free liveness endpoint. `/ready` is the database-backed readiness endpoint and succeeds only after the API can execute a real PostgreSQL query. The readiness response is deliberately non-sensitive and does not expose database connection details.
+
 ## Frontend
 
 ```bash
@@ -56,7 +58,7 @@ chmod 600 .env
 chmod 640 secrets/postgres_password
 ```
 
-The numeric group must match `APP_SECRET_GID` in `.env`. Docker Compose grants that supplementary group to the non-root API process so the process can read the secret without making the file world-readable or running the application as root.
+The numeric group must match `APP_SECRET_GID` in `.env`. Docker Compose grants that supplementary group to the non-root API process so the process can read the secret without making the file world-readable or running the application as root. File-backed Compose secrets preserve the source file's host ownership and mode, so changing the secret to mode `0600` without changing its owner to the API UID will prevent the non-root API process from reading it.
 
 Validate and start PostgreSQL/API:
 
@@ -68,7 +70,11 @@ docker compose run --rm api alembic upgrade head
 docker compose up -d api
 docker compose ps
 curl --fail http://127.0.0.1:8000/health
+curl --fail http://127.0.0.1:8000/ready
+curl --fail http://127.0.0.1:8000/api/v1/meta
 ```
+
+The readiness check validates more than process startup: it requires the non-root API process to load its file-backed database credential and complete a real PostgreSQL query.
 
 No production service publication is authorized by these commands. The API host port is bound to loopback only and PostgreSQL has no published host port.
 
