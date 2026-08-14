@@ -15,18 +15,49 @@ export type NoteDocument = {
   blocks: DocumentBlock[];
 };
 
+export type NoteState = "normal" | "archived" | "trashed";
+
+export type Notebook = {
+  id: string;
+  parent_id: string | null;
+  name: string;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type Tag = {
+  id: string;
+  name: string;
+  normalized_name: string;
+  color: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type Note = {
   id: string;
   notebook_id: string | null;
   title: string;
   document: NoteDocument;
   document_schema: number;
-  state: "normal" | "archived" | "trashed";
+  state: NoteState;
   is_pinned: boolean;
   color: string | null;
   created_at: string;
   updated_at: string;
 };
+
+export type NoteListOptions = {
+  state?: NoteState;
+  notebookId?: string | null;
+  tagId?: string | null;
+  query?: string;
+};
+
+export type NotePatch = Partial<
+  Pick<Note, "title" | "document" | "notebook_id" | "state" | "is_pinned" | "color">
+>;
 
 export class ApiError extends Error {
   readonly status: number;
@@ -146,25 +177,102 @@ export function logout(): Promise<void> {
   return apiFetch<void>("/auth/logout", { method: "POST" }, { csrf: true });
 }
 
-export function listNotes(): Promise<Note[]> {
-  return apiFetch<Note[]>("/notes?state=normal");
+export function listNotebooks(): Promise<Notebook[]> {
+  return apiFetch<Notebook[]>("/notebooks");
 }
 
-export function createNote(): Promise<Note> {
-  return apiFetch<Note>(
-    "/notes",
+export function createNotebook(name: string, parentId: string | null = null): Promise<Notebook> {
+  return apiFetch<Notebook>(
+    "/notebooks",
     {
       method: "POST",
-      body: JSON.stringify({ title: "", document: emptyDocument() }),
+      body: JSON.stringify({ name, parent_id: parentId }),
     },
     { csrf: true },
   );
 }
 
-export function updateNote(
-  noteId: string,
-  payload: Pick<Note, "title" | "document">,
-): Promise<Note> {
+export function updateNotebook(
+  notebookId: string,
+  payload: { name?: string; parent_id?: string | null; sort_order?: number },
+): Promise<Notebook> {
+  return apiFetch<Notebook>(
+    `/notebooks/${encodeURIComponent(notebookId)}`,
+    { method: "PATCH", body: JSON.stringify(payload) },
+    { csrf: true },
+  );
+}
+
+export function deleteNotebook(notebookId: string): Promise<void> {
+  return apiFetch<void>(
+    `/notebooks/${encodeURIComponent(notebookId)}`,
+    { method: "DELETE" },
+    { csrf: true },
+  );
+}
+
+export function listTags(): Promise<Tag[]> {
+  return apiFetch<Tag[]>("/tags");
+}
+
+export function createTag(name: string, color: string | null = null): Promise<Tag> {
+  return apiFetch<Tag>(
+    "/tags",
+    { method: "POST", body: JSON.stringify({ name, color }) },
+    { csrf: true },
+  );
+}
+
+export function updateTag(
+  tagId: string,
+  payload: { name?: string; color?: string | null },
+): Promise<Tag> {
+  return apiFetch<Tag>(
+    `/tags/${encodeURIComponent(tagId)}`,
+    { method: "PATCH", body: JSON.stringify(payload) },
+    { csrf: true },
+  );
+}
+
+export function deleteTag(tagId: string): Promise<void> {
+  return apiFetch<void>(
+    `/tags/${encodeURIComponent(tagId)}`,
+    { method: "DELETE" },
+    { csrf: true },
+  );
+}
+
+export function listNotes(options: NoteListOptions = {}): Promise<Note[]> {
+  const params = new URLSearchParams();
+  params.set("state", options.state ?? "normal");
+  if (options.notebookId) {
+    params.set("notebook_id", options.notebookId);
+  }
+  if (options.tagId) {
+    params.set("tag_id", options.tagId);
+  }
+  if (options.query?.trim()) {
+    params.set("q", options.query.trim());
+  }
+  return apiFetch<Note[]>(`/notes?${params.toString()}`);
+}
+
+export function createNote(notebookId: string | null = null): Promise<Note> {
+  return apiFetch<Note>(
+    "/notes",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        title: "",
+        document: emptyDocument(),
+        notebook_id: notebookId,
+      }),
+    },
+    { csrf: true },
+  );
+}
+
+export function updateNote(noteId: string, payload: NotePatch): Promise<Note> {
   return apiFetch<Note>(
     `/notes/${encodeURIComponent(noteId)}`,
     {
@@ -178,6 +286,26 @@ export function updateNote(
 export function trashNote(noteId: string): Promise<void> {
   return apiFetch<void>(
     `/notes/${encodeURIComponent(noteId)}`,
+    { method: "DELETE" },
+    { csrf: true },
+  );
+}
+
+export function listNoteTags(noteId: string): Promise<Tag[]> {
+  return apiFetch<Tag[]>(`/notes/${encodeURIComponent(noteId)}/tags`);
+}
+
+export function assignNoteTag(noteId: string, tagId: string): Promise<void> {
+  return apiFetch<void>(
+    `/notes/${encodeURIComponent(noteId)}/tags/${encodeURIComponent(tagId)}`,
+    { method: "PUT" },
+    { csrf: true },
+  );
+}
+
+export function removeNoteTag(noteId: string, tagId: string): Promise<void> {
+  return apiFetch<void>(
+    `/notes/${encodeURIComponent(noteId)}/tags/${encodeURIComponent(tagId)}`,
     { method: "DELETE" },
     { csrf: true },
   );
