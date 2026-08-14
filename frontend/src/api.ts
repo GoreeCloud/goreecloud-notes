@@ -201,6 +201,20 @@ export function logout(): Promise<void> {
   return apiFetch<void>("/auth/logout", { method: "POST" }, { csrf: true });
 }
 
+export function changePassword(currentPassword: string, newPassword: string): Promise<void> {
+  return apiFetch<void>(
+    "/auth/password",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        current_password: currentPassword,
+        new_password: newPassword,
+      }),
+    },
+    { csrf: true },
+  );
+}
+
 export function listNotebooks(): Promise<Notebook[]> {
   return apiFetch<Notebook[]>("/notebooks");
 }
