@@ -282,7 +282,8 @@ button {
 
 .crumbs,
 .editor-meta,
-.source-footer {
+.source-footer,
+.mobile-source-footer {
   color: #7a879a;
   font-size: 0.78rem;
 }
@@ -338,6 +339,23 @@ button {
 .source-footer {
   padding: 12px 24px 16px;
   border-top: 1px solid rgba(115, 132, 156, 0.12);
+}
+
+.mobile-source-footer {
+  display: none;
+}
+
+.source-link {
+  border-radius: 5px;
+  color: inherit;
+  font-weight: 700;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+.source-link:focus-visible {
+  outline: 2px solid #2f6fed;
+  outline-offset: 3px;
 }
 
 @media (max-width: 1040px) {
@@ -397,6 +415,20 @@ button {
   .note-list-pane {
     height: 100vh;
     border: 0;
+  }
+
+  .mobile-source-footer {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: auto;
+    padding-top: 8px;
+  }
+
+  .mobile-source-footer .source-link {
+    display: inline-flex;
+    min-height: 44px;
+    align-items: center;
   }
 }
 
@@ -461,6 +493,7 @@ button {
   .crumbs,
   .editor-meta,
   .source-footer,
+  .mobile-source-footer,
   .note-card small,
   .sidebar-footer {
     color: #8f9db1;
