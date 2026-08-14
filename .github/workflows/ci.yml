@@ -121,6 +121,66 @@ jobs:
           curl --fail --silent --show-error http://127.0.0.1:8000/health | grep -F '"status":"ok"'
           curl --fail --silent --show-error http://127.0.0.1:8000/api/v1/meta | grep -F '"product":"GoreeCloud Notes"'
 
+      - name: Validate private authentication and CSRF flow
+        run: |
+          printf '%s\n' 'ci-only-auth-password-12345' | \
+            docker compose exec -T api python -m app.cli create-user \
+              --username ci-user \
+              --display-name 'CI User' \
+              --password-stdin
+
+          login_status=$(curl \
+            --silent \
+            --show-error \
+            --cookie-jar /tmp/goreecloud-notes-cookies.txt \
+            --output /tmp/goreecloud-notes-login.json \
+            --write-out '%{http_code}' \
+            --header 'Content-Type: application/json' \
+            --data '{"username":"ci-user","password":"ci-only-auth-password-12345"}' \
+            http://127.0.0.1:8000/api/v1/auth/login)
+          test "$login_status" = "200"
+          grep -F '"username":"ci-user"' /tmp/goreecloud-notes-login.json
+
+          csrf_token=$(awk '$6 == "goreecloud_notes_csrf" { print $7 }' /tmp/goreecloud-notes-cookies.txt)
+          test -n "$csrf_token"
+
+          curl \
+            --fail \
+            --silent \
+            --show-error \
+            --cookie /tmp/goreecloud-notes-cookies.txt \
+            http://127.0.0.1:8000/api/v1/auth/me | grep -F '"username":"ci-user"'
+
+          no_csrf_status=$(curl \
+            --silent \
+            --show-error \
+            --cookie /tmp/goreecloud-notes-cookies.txt \
+            --output /dev/null \
+            --write-out '%{http_code}' \
+            --request POST \
+            http://127.0.0.1:8000/api/v1/auth/logout)
+          test "$no_csrf_status" = "403"
+
+          logout_status=$(curl \
+            --silent \
+            --show-error \
+            --cookie /tmp/goreecloud-notes-cookies.txt \
+            --output /dev/null \
+            --write-out '%{http_code}' \
+            --header "X-CSRF-Token: $csrf_token" \
+            --request POST \
+            http://127.0.0.1:8000/api/v1/auth/logout)
+          test "$logout_status" = "204"
+
+          revoked_status=$(curl \
+            --silent \
+            --show-error \
+            --cookie /tmp/goreecloud-notes-cookies.txt \
+            --output /dev/null \
+            --write-out '%{http_code}' \
+            http://127.0.0.1:8000/api/v1/auth/me)
+          test "$revoked_status" = "401"
+
       - name: Capture Compose diagnostics
         if: always()
         run: |
