@@ -31,6 +31,7 @@ _SCRYPT_P = 1
 _SCRYPT_DKLEN = 64
 _SCRYPT_MAXMEM = 64 * 1024 * 1024
 _PASSWORD_FORMAT = "scrypt-v1"
+_DUMMY_PASSWORD_SALT = b"goreecloud-notes-login-failure"
 
 
 @dataclass(frozen=True, slots=True)
@@ -74,21 +75,25 @@ def _decode_bytes(value: str) -> bytes:
     return urlsafe_b64decode(value + padding)
 
 
+def _derive_password(password: str, *, salt: bytes, length: int = _SCRYPT_DKLEN) -> bytes:
+    return scrypt(
+        password.encode("utf-8"),
+        salt=salt,
+        n=_SCRYPT_N,
+        r=_SCRYPT_R,
+        p=_SCRYPT_P,
+        dklen=length,
+        maxmem=_SCRYPT_MAXMEM,
+    )
+
+
 def hash_password(password: str) -> str:
     """Hash a password using salted scrypt and a versioned storage envelope."""
 
     validate_password(password)
 
     salt = token_bytes(16)
-    derived = scrypt(
-        password.encode("utf-8"),
-        salt=salt,
-        n=_SCRYPT_N,
-        r=_SCRYPT_R,
-        p=_SCRYPT_P,
-        dklen=_SCRYPT_DKLEN,
-        maxmem=_SCRYPT_MAXMEM,
-    )
+    derived = _derive_password(password, salt=salt)
     return "$".join(
         (
             _PASSWORD_FORMAT,
@@ -117,19 +122,17 @@ def verify_password(password: str, encoded_hash: str) -> bool:
 
         salt = _decode_bytes(raw_salt)
         expected = _decode_bytes(raw_expected)
-        actual = scrypt(
-            password.encode("utf-8"),
-            salt=salt,
-            n=n,
-            r=r,
-            p=p,
-            dklen=len(expected),
-            maxmem=_SCRYPT_MAXMEM,
-        )
+        actual = _derive_password(password, salt=salt, length=len(expected))
     except (TypeError, ValueError):
         return False
 
     return compare_digest(actual, expected)
+
+
+def _run_dummy_password_work(password: str) -> None:
+    """Pay the normal scrypt cost for an unknown account without storing output."""
+
+    _derive_password(password, salt=_DUMMY_PASSWORD_SALT)
 
 
 def secret_digest(secret: str) -> str:
@@ -188,18 +191,12 @@ def authenticate_user(db: Session, *, username: str, password: str) -> User | No
     ).first()
 
     if row is None:
-        # Preserve a similar expensive password-hash path for unknown users so a
-        # login endpoint does not become a cheap username-existence oracle.
-        try:
-            hash_password(password)
-        except ValueError:
-            # Login accepts legacy/short attempted values only to follow the same
-            # generic failure path; new credentials always use validate_password.
-            pass
+        _run_dummy_password_work(password)
         return None
 
     user, credential = row
-    if not user.is_active or not verify_password(password, credential.password_hash):
+    password_matches = verify_password(password, credential.password_hash)
+    if not user.is_active or not password_matches:
         return None
 
     return user
