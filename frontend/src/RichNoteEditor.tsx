@@ -174,7 +174,7 @@ export function RichNoteEditor({ noteId, value, disabled = false, onChange }: Ri
   const selectedImage = imageAttachments.find((attachment) => attachment.id === selectedImageId) ?? null;
 
   function insertSelectedImage() {
-    if (!selectedImage || disabled) return;
+    if (!selectedImage || disabled || !editor) return;
     editor
       .chain()
       .focus()
