@@ -5,12 +5,15 @@ from __future__ import annotations
 import argparse
 import getpass
 import sys
+from pathlib import Path
 
 from sqlalchemy import select
 
 from .auth import hash_password, normalize_username, replace_user_password, validate_password
+from .config import get_settings
 from .database import SessionLocal
 from .models import User, UserCredential
+from .portability import ExportError, export_user_library, verify_export_bundle
 
 
 def _read_password(password_stdin: bool) -> str:
@@ -79,6 +82,46 @@ def reset_password(*, username: str, password_stdin: bool) -> None:
     print(f"Reset GoreeCloud Notes password and revoked all sessions: {account_name}")
 
 
+def export_library(*, username: str, output: str, overwrite: bool) -> None:
+    """Create a complete, verified native library bundle for one account."""
+
+    normalized = normalize_username(username)
+    if not normalized:
+        raise ValueError("Username must not be empty.")
+
+    settings = get_settings()
+    output_path = Path(output)
+    with SessionLocal() as db:
+        user = db.scalar(select(User).where(User.username_normalized == normalized))
+        if user is None:
+            raise ValueError("Account not found.")
+
+        result = export_user_library(
+            db,
+            owner=user,
+            attachment_root=Path(settings.attachment_root),
+            output_path=output_path,
+            overwrite=overwrite,
+        )
+
+    print(f"Exported GoreeCloud Notes library: {result.output_path}")
+    print(f"SHA-256: {result.sha256}")
+    print(f"Size: {result.size_bytes} bytes")
+    print(f"Notes: {result.note_count}")
+    print(f"Attachments: {result.attachment_count}")
+
+
+def verify_library_export(*, input_path: str) -> None:
+    """Verify an existing native library export without connecting to PostgreSQL."""
+
+    result = verify_export_bundle(Path(input_path))
+    print(f"Verified GoreeCloud Notes export: {result.path}")
+    print(f"SHA-256: {result.sha256}")
+    print(f"Size: {result.size_bytes} bytes")
+    print(f"Notes: {result.note_count}")
+    print(f"Attachments: {result.attachment_count}")
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="GoreeCloud Notes administrative commands")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -105,6 +148,24 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Read one replacement password line from standard input instead of prompting interactively.",
     )
+
+    export = subparsers.add_parser(
+        "export-library",
+        help="Create a verified ZIP bundle containing one account's native library and attachment bytes.",
+    )
+    export.add_argument("--username", required=True)
+    export.add_argument("--output", required=True, help="Destination ZIP path.")
+    export.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="Explicitly allow replacement when the destination file already exists.",
+    )
+
+    verify = subparsers.add_parser(
+        "verify-library-export",
+        help="Verify the structure and SHA-256 integrity of a native GoreeCloud Notes export bundle.",
+    )
+    verify.add_argument("--input", required=True, dest="input_path")
     return parser
 
 
@@ -124,9 +185,17 @@ def main() -> int:
                 username=args.username,
                 password_stdin=args.password_stdin,
             )
+        elif args.command == "export-library":
+            export_library(
+                username=args.username,
+                output=args.output,
+                overwrite=args.overwrite,
+            )
+        elif args.command == "verify-library-export":
+            verify_library_export(input_path=args.input_path)
         else:
             parser.error("Unsupported command.")
-    except ValueError as exc:
+    except (ValueError, ExportError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
 
