@@ -82,6 +82,13 @@ jobs:
       - name: Prepare sanitized CI configuration
         run: |
           cp .env.example .env
+          cat >> .env <<'EOF'
+          GOREECLOUD_NOTES_LOGIN_RATE_WINDOW_SECONDS=60
+          GOREECLOUD_NOTES_LOGIN_RATE_ACCOUNT_FAILURES=3
+          GOREECLOUD_NOTES_LOGIN_RATE_SOURCE_FAILURES=6
+          GOREECLOUD_NOTES_LOGIN_RATE_COOLDOWN_SECONDS=2
+          GOREECLOUD_NOTES_LOGIN_RATE_STATE_TTL_SECONDS=300
+          EOF
           mkdir -p secrets
           printf '%s\n' 'ci-only-postgres-password' > secrets/postgres_password
           sudo chgrp 20001 secrets/postgres_password
@@ -123,6 +130,9 @@ jobs:
 
       - name: Validate private authentication and CSRF flow
         run: bash scripts/ci_validate_auth.sh
+
+      - name: Validate bounded login abuse controls and proxy boundary
+        run: bash scripts/ci_validate_login_security.sh
 
       - name: Validate organization, ownership, revisions, and note lifecycle
         run: bash scripts/ci_validate_workspace.sh
