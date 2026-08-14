@@ -52,6 +52,26 @@ jobs:
           python -m app.migration build-memos-manifest tests/fixtures/memos_export_v1.json > /tmp/goreecloud-migration-manifest.json
           python -c 'import json; manifest=json.load(open("/tmp/goreecloud-migration-manifest.json")); assert manifest["format"] == "goreecloud-notes-migration"; assert manifest["schemaVersion"] == 1; assert manifest["validation"]["sourceMutationPerformed"] is False; assert manifest["validation"]["targetMutationPerformed"] is False; assert manifest["notes"][0]["attachments"][0]["binary"] == {"status":"required","sha256":None,"verifiedSizeBytes":None}; assert manifest["notes"][1]["lifecycle"]["state"] == "trashed"; assert manifest["notes"][1]["lifecycle"]["restoreTarget"] == "archived"'
 
+      - name: Validate synthetic attachment-binary evidence
+        run: |
+          mkdir -p /tmp/goreecloud-attachment-evidence-root
+          python - <<'PY'
+          import base64
+          from pathlib import Path
+          Path('/tmp/goreecloud-attachment-evidence-root/fixture.png').write_bytes(base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Z8XcAAAAASUVORK5CYII='))
+          PY
+          cat > /tmp/goreecloud-attachment-map.json <<'EOF'
+          {
+            "format": "goreecloud-notes-attachment-map",
+            "schemaVersion": 1,
+            "attachments": [
+              {"sourceName": "attachments/200", "relativePath": "fixture.png"}
+            ]
+          }
+          EOF
+          python -m app.migration verify-attachment-binaries /tmp/goreecloud-migration-manifest.json /tmp/goreecloud-attachment-map.json /tmp/goreecloud-attachment-evidence-root > /tmp/goreecloud-attachment-evidence.json
+          python -c 'import json; evidence=json.load(open("/tmp/goreecloud-attachment-evidence.json")); assert evidence["format"] == "goreecloud-notes-attachment-evidence"; assert evidence["verification"]["complete"] is True; assert evidence["verification"]["sourceMutationPerformed"] is False; assert evidence["verification"]["targetMutationPerformed"] is False; assert evidence["attachments"][0]["verifiedSizeBytes"] == 68; assert evidence["attachments"][0]["sha256"] == "489b326e81d3ef516100495b2b2ea91199dafa1f57b7e78bcebddda1bbe36e13"'
+
   frontend:
     name: Frontend lint and build
     runs-on: ubuntu-latest

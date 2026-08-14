@@ -7,6 +7,7 @@ import json
 import sys
 from pathlib import Path
 
+from .evidence import DEFAULT_MAX_MANIFEST_BYTES, serialize_evidence, verify_attachment_binaries
 from .manifest import build_memos_manifest, serialize_manifest
 from .memos import DEFAULT_MAX_EXPORT_BYTES, format_text_report, inspect_memos_export
 
@@ -37,6 +38,20 @@ def build_parser() -> argparse.ArgumentParser:
         help="Emit a deterministic provider-neutral migration manifest from a validated schema-v1 export.",
     )
     _add_export_arguments(manifest)
+
+    evidence = subparsers.add_parser(
+        "verify-attachment-binaries",
+        help="Hash and verify operator-supplied local attachment bytes against a migration manifest without importing them.",
+    )
+    evidence.add_argument("manifest", type=Path, help="Path to a goreecloud-notes-migration schema-v1 manifest.")
+    evidence.add_argument("attachment_map", type=Path, help="Path to a goreecloud-notes-attachment-map schema-v1 JSON mapping.")
+    evidence.add_argument("evidence_root", type=Path, help="Directory containing the operator-supplied extracted attachment files.")
+    evidence.add_argument(
+        "--max-manifest-bytes",
+        type=int,
+        default=DEFAULT_MAX_MANIFEST_BYTES,
+        help=f"Maximum manifest/map JSON size (default: {DEFAULT_MAX_MANIFEST_BYTES} bytes).",
+    )
     return parser
 
 
@@ -44,8 +59,10 @@ def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
 
-    if args.max_bytes <= 0:
+    if args.command in {"inspect-memos-export", "build-memos-manifest"} and args.max_bytes <= 0:
         parser.error("--max-bytes must be positive.")
+    if args.command == "verify-attachment-binaries" and args.max_manifest_bytes <= 0:
+        parser.error("--max-manifest-bytes must be positive.")
 
     try:
         if args.command == "inspect-memos-export":
@@ -60,6 +77,16 @@ def main() -> int:
             manifest = build_memos_manifest(args.export, max_bytes=args.max_bytes)
             sys.stdout.write(serialize_manifest(manifest))
             return 0
+
+        if args.command == "verify-attachment-binaries":
+            evidence = verify_attachment_binaries(
+                args.manifest,
+                args.attachment_map,
+                args.evidence_root,
+                max_manifest_bytes=args.max_manifest_bytes,
+            )
+            sys.stdout.write(serialize_evidence(evidence))
+            return 0 if evidence["verification"]["complete"] else 4
     except (OSError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
