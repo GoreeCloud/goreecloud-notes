@@ -11,14 +11,18 @@ from sqlalchemy.orm import Session
 
 from .attachments import router as attachments_router
 from .auth import (
+    MAX_PASSWORD_LENGTH,
+    MIN_PASSWORD_LENGTH,
     AuthContext,
     authenticate_user,
     clear_session_cookies,
     get_current_auth_context,
     issue_session,
+    replace_user_password,
     require_csrf,
     revoke_session,
     set_session_cookies,
+    verify_user_password,
 )
 from .config import get_settings
 from .database import engine, get_db
@@ -49,7 +53,14 @@ class LoginRequest(BaseModel):
     """Credentials accepted by the private login endpoint."""
 
     username: str = Field(min_length=1, max_length=64)
-    password: str = Field(min_length=1, max_length=1024)
+    password: str = Field(min_length=1, max_length=MAX_PASSWORD_LENGTH)
+
+
+class PasswordChangeRequest(BaseModel):
+    """Authenticated credential rotation request."""
+
+    current_password: str = Field(min_length=1, max_length=MAX_PASSWORD_LENGTH)
+    new_password: str = Field(min_length=MIN_PASSWORD_LENGTH, max_length=MAX_PASSWORD_LENGTH)
 
 
 class CurrentUser(BaseModel):
@@ -138,6 +149,38 @@ def me(
 
     response.headers["Cache-Control"] = "no-store"
     return _current_user(context)
+
+
+@api.post("/auth/password", status_code=status.HTTP_204_NO_CONTENT, tags=["authentication"])
+def change_password(
+    payload: PasswordChangeRequest,
+    response: Response,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_csrf),
+) -> Response:
+    """Rotate the current user's password and revoke every browser session."""
+
+    if not verify_user_password(db, user=context.user, password=payload.current_password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="current password is incorrect",
+        )
+    if verify_user_password(db, user=context.user, password=payload.new_password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="new password must differ from the current password",
+        )
+
+    try:
+        replace_user_password(db, user=context.user, new_password=payload.new_password)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+
+    db.commit()
+    clear_session_cookies(response, settings)
+    response.status_code = status.HTTP_204_NO_CONTENT
+    response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 @api.post("/auth/logout", status_code=status.HTTP_204_NO_CONTENT, tags=["authentication"])
