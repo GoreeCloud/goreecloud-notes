@@ -222,7 +222,7 @@ PY
 )
 
 curl --fail --silent --show-error --cookie "$target_cookies" \
-  "$base_url/attachments/$attachment_id/download" \
+  "$base_url/attachments/$attachment_id" \
   --output /tmp/goreecloud-notes-memos-import-downloaded.png
 test "$(wc -c < /tmp/goreecloud-notes-memos-import-downloaded.png | tr -d ' ')" = "68"
 test "$(sha256sum /tmp/goreecloud-notes-memos-import-downloaded.png | awk '{print $1}')" = "489b326e81d3ef516100495b2b2ea91199dafa1f57b7e78bcebddda1bbe36e13"
@@ -241,7 +241,7 @@ curl --fail --silent --show-error \
 test "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
   --cookie "$isolation_cookies" "$base_url/notes/$normal_note_id")" = "404"
 test "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
-  --cookie "$isolation_cookies" "$base_url/attachments/$attachment_id/download")" = "404"
+  --cookie "$isolation_cookies" "$base_url/attachments/$attachment_id")" = "404"
 
 # Verify persistent migration provenance exists only for the target owner/import.
 docker compose exec -T db sh -c 'PGPASSWORD="$(cat /run/secrets/postgres_password)" psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "SELECT count(*) FROM migration_imports; SELECT count(*) FROM migration_note_records;"' \
