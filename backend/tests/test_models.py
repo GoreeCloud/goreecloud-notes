@@ -2,7 +2,7 @@
 
 from sqlalchemy import CheckConstraint, UniqueConstraint
 
-from app import models  # noqa: F401
+from app import login_security, models  # noqa: F401
 from app.database import Base
 
 
@@ -10,6 +10,7 @@ def test_native_core_tables_are_registered() -> None:
     assert set(Base.metadata.tables) == {
         "attachments",
         "auth_sessions",
+        "login_rate_buckets",
         "note_revisions",
         "note_tags",
         "notebooks",
@@ -42,6 +43,22 @@ def test_authentication_tables_do_not_store_raw_browser_secrets() -> None:
     assert "csrf_token" not in sessions.c
     assert "password_hash" in credentials.c
     assert "password" not in credentials.c
+
+
+def test_login_rate_state_keeps_only_opaque_bucket_signals() -> None:
+    buckets = Base.metadata.tables["login_rate_buckets"]
+
+    assert {
+        "bucket_key",
+        "scope",
+        "failure_count",
+        "window_started_at",
+        "blocked_until",
+        "last_failed_at",
+        "expires_at",
+    } == set(buckets.c.keys())
+    for clear_identifier in ("username", "source", "ip", "ip_address", "account"):
+        assert clear_identifier not in buckets.c
 
 
 def test_note_state_is_native_not_hidden_content_metadata() -> None:
