@@ -29,13 +29,20 @@ csrf_from() {
 }
 
 wait_for_db() {
-  for attempt in $(seq 1 30); do
-    if docker compose exec -T db sh -c 'pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"' >/dev/null 2>&1; then
+  # The official PostgreSQL image starts a temporary local server while an empty
+  # data directory is initialized, then shuts it down before exec'ing the final
+  # postgres process as PID 1. pg_isready can therefore briefly succeed too
+  # early. Require both the final PID 1 process and database readiness so a
+  # destructive restore never races the bootstrap server shutdown.
+  for attempt in $(seq 1 60); do
+    if docker compose exec -T db sh -c \
+      '[ "$(cat /proc/1/comm)" = "postgres" ] && pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
+      >/dev/null 2>&1; then
       return 0
     fi
     sleep 1
   done
-  echo 'PostgreSQL did not become ready.' >&2
+  echo 'PostgreSQL final server did not become ready.' >&2
   return 1
 }
 
