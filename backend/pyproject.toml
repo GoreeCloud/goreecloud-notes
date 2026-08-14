@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=80,<81"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "goreecloud-notes-backend"
 version = "0.1.0"
@@ -16,6 +20,11 @@ test = [
   "pytest>=8.0,<9.0",
   "httpx>=0.28,<0.29",
 ]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*"]
+exclude = ["migrations*", "tests*"]
 
 [tool.fastapi]
 entrypoint = "app.main:app"
