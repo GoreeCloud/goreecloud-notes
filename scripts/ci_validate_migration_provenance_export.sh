@@ -196,7 +196,7 @@ assert result['counts'] == {
     'notebooks': 0,
     'notes': 2,
     'tags': 2,
-    'noteTagRelationships': 2,
+    'noteTagRelationships': 3,
     'attachments': 1,
     'revisions': 0,
     'migrationImports': 1,
