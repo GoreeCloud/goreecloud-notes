@@ -50,6 +50,68 @@ curl \
   --cookie "$cookie_a" \
   "$base_url/auth/me" | grep -F '"username":"ci-user"'
 
+sessions_before_status=$(curl \
+  --silent \
+  --show-error \
+  --cookie "$cookie_a" \
+  --output /tmp/goreecloud-notes-sessions-before.json \
+  --write-out '%{http_code}' \
+  "$base_url/auth/sessions")
+test "$sessions_before_status" = "200"
+test "$(grep -o '"id":' /tmp/goreecloud-notes-sessions-before.json | wc -l)" -eq 2
+test "$(grep -o '"current":true' /tmp/goreecloud-notes-sessions-before.json | wc -l)" -eq 1
+
+revoke_others_without_csrf=$(curl \
+  --silent \
+  --show-error \
+  --cookie "$cookie_a" \
+  --output /dev/null \
+  --write-out '%{http_code}' \
+  --request POST \
+  "$base_url/auth/sessions/revoke-others")
+test "$revoke_others_without_csrf" = "403"
+
+revoke_others_status=$(curl \
+  --silent \
+  --show-error \
+  --cookie "$cookie_a" \
+  --output /tmp/goreecloud-notes-revoke-others.json \
+  --write-out '%{http_code}' \
+  --header "X-CSRF-Token: $csrf_a" \
+  --request POST \
+  "$base_url/auth/sessions/revoke-others")
+test "$revoke_others_status" = "200"
+grep -F '"revoked":1' /tmp/goreecloud-notes-revoke-others.json
+
+current_after_selective_revoke=$(curl \
+  --silent \
+  --show-error \
+  --cookie "$cookie_a" \
+  --output /dev/null \
+  --write-out '%{http_code}' \
+  "$base_url/auth/me")
+test "$current_after_selective_revoke" = "200"
+
+other_after_selective_revoke=$(curl \
+  --silent \
+  --show-error \
+  --cookie "$cookie_b" \
+  --output /dev/null \
+  --write-out '%{http_code}' \
+  "$base_url/auth/me")
+test "$other_after_selective_revoke" = "401"
+
+sessions_after_status=$(curl \
+  --silent \
+  --show-error \
+  --cookie "$cookie_a" \
+  --output /tmp/goreecloud-notes-sessions-after.json \
+  --write-out '%{http_code}' \
+  "$base_url/auth/sessions")
+test "$sessions_after_status" = "200"
+test "$(grep -o '"id":' /tmp/goreecloud-notes-sessions-after.json | wc -l)" -eq 1
+grep -F '"current":true' /tmp/goreecloud-notes-sessions-after.json
+
 password_without_csrf=$(curl \
   --silent \
   --show-error \
