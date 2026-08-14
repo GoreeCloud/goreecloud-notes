@@ -1,18 +1,11 @@
+import { emptyDocument, sanitizeDocument, type NoteDocument } from "./document";
+
+export type { NoteDocument } from "./document";
+
 export type CurrentUser = {
   id: string;
   username: string;
   display_name: string;
-};
-
-export type DocumentBlock = {
-  type: string;
-  text?: string;
-};
-
-export type NoteDocument = {
-  format: "goreecloud.blocks";
-  version: 1;
-  blocks: DocumentBlock[];
 };
 
 export type NoteState = "normal" | "archived" | "trashed";
@@ -115,8 +108,7 @@ async function apiFetch<T>(
         message = body.detail;
       }
     } catch {
-      // Keep the status-derived message when the response is intentionally empty
-      // or does not contain JSON.
+      // Keep the status-derived message for intentionally empty/non-JSON errors.
     }
     throw new ApiError(response.status, message);
   }
@@ -128,41 +120,8 @@ async function apiFetch<T>(
   return (await response.json()) as T;
 }
 
-export function emptyDocument(): NoteDocument {
-  return {
-    format: "goreecloud.blocks",
-    version: 1,
-    blocks: [],
-  };
-}
-
-export function documentToText(document: NoteDocument | Record<string, unknown>): string {
-  if (
-    document.format !== "goreecloud.blocks" ||
-    document.version !== 1 ||
-    !Array.isArray(document.blocks)
-  ) {
-    return "";
-  }
-
-  return document.blocks
-    .filter((block): block is DocumentBlock => typeof block === "object" && block !== null)
-    .map((block) => (typeof block.text === "string" ? block.text : ""))
-    .join("\n\n");
-}
-
-export function textToDocument(value: string): NoteDocument {
-  const blocks = value
-    .split(/\n{2,}/)
-    .map((paragraph) => paragraph.trimEnd())
-    .filter((paragraph) => paragraph.length > 0)
-    .map((text) => ({ type: "paragraph", text }));
-
-  return {
-    format: "goreecloud.blocks",
-    version: 1,
-    blocks,
-  };
+function normalizeNote(note: Note): Note {
+  return { ...note, document: sanitizeDocument(note.document) };
 }
 
 export function getCurrentUser(): Promise<CurrentUser> {
@@ -187,10 +146,7 @@ export function listNotebooks(): Promise<Notebook[]> {
 export function createNotebook(name: string, parentId: string | null = null): Promise<Notebook> {
   return apiFetch<Notebook>(
     "/notebooks",
-    {
-      method: "POST",
-      body: JSON.stringify({ name, parent_id: parentId }),
-    },
+    { method: "POST", body: JSON.stringify({ name, parent_id: parentId }) },
     { csrf: true },
   );
 }
@@ -245,44 +201,39 @@ export function deleteTag(tagId: string): Promise<void> {
   );
 }
 
-export function listNotes(options: NoteListOptions = {}): Promise<Note[]> {
+export async function listNotes(options: NoteListOptions = {}): Promise<Note[]> {
   const params = new URLSearchParams();
   params.set("state", options.state ?? "normal");
-  if (options.notebookId) {
-    params.set("notebook_id", options.notebookId);
-  }
-  if (options.tagId) {
-    params.set("tag_id", options.tagId);
-  }
-  if (options.query?.trim()) {
-    params.set("q", options.query.trim());
-  }
-  return apiFetch<Note[]>(`/notes?${params.toString()}`);
+  if (options.notebookId) params.set("notebook_id", options.notebookId);
+  if (options.tagId) params.set("tag_id", options.tagId);
+  if (options.query?.trim()) params.set("q", options.query.trim());
+  return (await apiFetch<Note[]>(`/notes?${params.toString()}`)).map(normalizeNote);
 }
 
-export function createNote(notebookId: string | null = null): Promise<Note> {
-  return apiFetch<Note>(
-    "/notes",
-    {
-      method: "POST",
-      body: JSON.stringify({
-        title: "",
-        document: emptyDocument(),
-        notebook_id: notebookId,
-      }),
-    },
-    { csrf: true },
+export async function createNote(notebookId: string | null = null): Promise<Note> {
+  return normalizeNote(
+    await apiFetch<Note>(
+      "/notes",
+      {
+        method: "POST",
+        body: JSON.stringify({ title: "", document: emptyDocument(), notebook_id: notebookId }),
+      },
+      { csrf: true },
+    ),
   );
 }
 
-export function updateNote(noteId: string, payload: NotePatch): Promise<Note> {
-  return apiFetch<Note>(
-    `/notes/${encodeURIComponent(noteId)}`,
-    {
-      method: "PATCH",
-      body: JSON.stringify(payload),
-    },
-    { csrf: true },
+export async function getNote(noteId: string): Promise<Note> {
+  return normalizeNote(await apiFetch<Note>(`/notes/${encodeURIComponent(noteId)}`));
+}
+
+export async function updateNote(noteId: string, payload: NotePatch): Promise<Note> {
+  return normalizeNote(
+    await apiFetch<Note>(
+      `/notes/${encodeURIComponent(noteId)}`,
+      { method: "PATCH", body: JSON.stringify(payload) },
+      { csrf: true },
+    ),
   );
 }
 
