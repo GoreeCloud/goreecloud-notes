@@ -21,6 +21,7 @@ from .auth import (
 )
 from .config import get_settings
 from .database import engine, get_db
+from .workspace import router as workspace_router
 
 settings = get_settings()
 
@@ -153,4 +154,5 @@ def logout(
     return response
 
 
+api.include_router(workspace_router)
 app.include_router(api)
