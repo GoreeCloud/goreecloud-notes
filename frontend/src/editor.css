@@ -1,0 +1,208 @@
+.rich-editor-shell {
+  overflow: hidden;
+  border: 1px solid rgba(126, 145, 169, 0.18);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.5);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);
+}
+
+.rich-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  align-items: center;
+  padding: 9px 10px;
+  border-bottom: 1px solid rgba(126, 145, 169, 0.14);
+  background: rgba(239, 244, 250, 0.72);
+  backdrop-filter: blur(14px);
+}
+
+.rich-toolbar-button {
+  min-height: 30px;
+  padding: 5px 8px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: #66738a;
+  background: transparent;
+  cursor: pointer;
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.rich-toolbar-button:hover:not(:disabled),
+.rich-toolbar-button.active {
+  border-color: rgba(47, 111, 237, 0.18);
+  color: #174fb8;
+  background: rgba(224, 235, 255, 0.78);
+}
+
+.rich-toolbar-separator {
+  width: 1px;
+  height: 22px;
+  margin: 0 2px;
+  background: rgba(126, 145, 169, 0.2);
+}
+
+.rich-editor-content {
+  min-height: 360px;
+  padding: 24px 26px 38px;
+  outline: 0;
+  color: #4f5c72;
+  line-height: 1.72;
+}
+
+.rich-editor-content > *:first-child {
+  margin-top: 0;
+}
+
+.rich-editor-content > *:last-child {
+  margin-bottom: 0;
+}
+
+.rich-editor-content p {
+  margin: 0 0 1em;
+}
+
+.rich-editor-content h1,
+.rich-editor-content h2,
+.rich-editor-content h3 {
+  margin: 1.2em 0 0.55em;
+  color: #202b3e;
+  line-height: 1.25;
+  letter-spacing: -0.025em;
+}
+
+.rich-editor-content h1 { font-size: 1.75rem; }
+.rich-editor-content h2 { font-size: 1.4rem; }
+.rich-editor-content h3 { font-size: 1.16rem; }
+
+.rich-editor-content ul,
+.rich-editor-content ol {
+  padding-left: 1.55rem;
+}
+
+.rich-editor-content blockquote {
+  margin: 1.2em 0;
+  padding: 0.2em 0 0.2em 1rem;
+  border-left: 3px solid rgba(47, 111, 237, 0.48);
+  color: #657289;
+}
+
+.rich-editor-content code {
+  padding: 0.12em 0.35em;
+  border-radius: 5px;
+  background: rgba(225, 232, 242, 0.8);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.9em;
+}
+
+.rich-editor-content pre {
+  overflow-x: auto;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: #172033;
+  color: #eef4ff;
+}
+
+.rich-editor-content pre code {
+  padding: 0;
+  background: transparent;
+  color: inherit;
+}
+
+.rich-editor-content hr {
+  margin: 2rem 0;
+  border: 0;
+  border-top: 1px solid rgba(126, 145, 169, 0.25);
+}
+
+.rich-editor-content p.is-editor-empty:first-child::before {
+  float: left;
+  height: 0;
+  color: #9aa5b5;
+  content: "Start writing…";
+  pointer-events: none;
+}
+
+.rich-editor-loading {
+  padding: 24px;
+  color: #7a879a;
+}
+
+.save-state.conflict {
+  color: #a33c3c;
+  font-weight: 800;
+}
+
+@media (max-width: 760px) {
+  .rich-toolbar {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+  }
+
+  .rich-toolbar-separator {
+    flex: 0 0 auto;
+  }
+
+  .rich-toolbar-button {
+    flex: 0 0 auto;
+  }
+
+  .rich-editor-content {
+    min-height: 280px;
+    padding: 20px 18px 30px;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  .rich-editor-shell {
+    border-color: rgba(206, 220, 240, 0.1);
+    background: rgba(25, 34, 47, 0.66);
+    box-shadow: none;
+  }
+
+  .rich-toolbar {
+    border-color: rgba(206, 220, 240, 0.09);
+    background: rgba(31, 42, 57, 0.86);
+  }
+
+  .rich-toolbar-button {
+    color: #aab6c8;
+  }
+
+  .rich-toolbar-button:hover:not(:disabled),
+  .rich-toolbar-button.active {
+    color: #a9c4ff;
+    background: rgba(40, 65, 104, 0.72);
+  }
+
+  .rich-toolbar-separator {
+    background: rgba(206, 220, 240, 0.13);
+  }
+
+  .rich-editor-content {
+    color: #bac5d6;
+  }
+
+  .rich-editor-content h1,
+  .rich-editor-content h2,
+  .rich-editor-content h3 {
+    color: #edf2fa;
+  }
+
+  .rich-editor-content blockquote {
+    color: #9eacc0;
+  }
+
+  .rich-editor-content code {
+    background: rgba(55, 70, 92, 0.72);
+  }
+
+  .rich-editor-content pre {
+    background: #0e131c;
+  }
+
+  .save-state.conflict {
+    color: #f0a0a0;
+  }
+}
