@@ -23,6 +23,20 @@ from .models import Attachment, Note
 router = APIRouter(tags=["attachments"])
 settings = get_settings()
 
+# Milestone 0 previews intentionally allow only common raster image formats. Active
+# document formats such as SVG/HTML and generic browser-renderable files stay on the
+# ordinary download path until content-sanitization and production scanning policy are
+# separately approved.
+SAFE_IMAGE_PREVIEW_MEDIA_TYPES = frozenset(
+    {
+        "image/avif",
+        "image/gif",
+        "image/jpeg",
+        "image/png",
+        "image/webp",
+    }
+)
+
 
 class AttachmentView(BaseModel):
     """Non-sensitive attachment metadata exposed to an authorized owner."""
@@ -86,6 +100,15 @@ def _storage_path(storage_key: str) -> Path:
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="invalid attachment storage key") from exc
     return candidate
+
+
+def _require_attachment_path(attachment: Attachment) -> Path:
+    """Resolve persisted attachment bytes or report storage unavailability."""
+
+    path = _storage_path(attachment.storage_key)
+    if not path.is_file():
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="attachment bytes unavailable")
+    return path
 
 
 @router.get("/notes/{note_id}/attachments", response_model=list[AttachmentView])
@@ -195,12 +218,10 @@ def download_attachment(
     db: Session = Depends(get_db),
     context: AuthContext = Depends(get_current_auth_context),
 ) -> FileResponse:
-    """Return attachment bytes only to their owner."""
+    """Return attachment bytes only to their owner using the download path."""
 
     attachment = _require_owned_attachment(db, owner_id=context.user.id, attachment_id=attachment_id)
-    path = _storage_path(attachment.storage_key)
-    if not path.is_file():
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="attachment bytes unavailable")
+    path = _require_attachment_path(attachment)
 
     return FileResponse(
         path,
@@ -208,6 +229,38 @@ def download_attachment(
         filename=attachment.filename,
         headers={
             "Cache-Control": "private, no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
+@router.get("/attachments/{attachment_id}/preview")
+def preview_attachment(
+    attachment_id: UUID,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(get_current_auth_context),
+) -> FileResponse:
+    """Return an inline-safe raster-image preview only to the attachment owner.
+
+    Preview authorization is identical to ordinary attachment download authorization.
+    The initial preview allowlist deliberately excludes SVG and non-image document types
+    so adding previews does not silently create an active-content rendering surface.
+    """
+
+    attachment = _require_owned_attachment(db, owner_id=context.user.id, attachment_id=attachment_id)
+    if attachment.media_type.casefold() not in SAFE_IMAGE_PREVIEW_MEDIA_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail="attachment type is not eligible for inline preview",
+        )
+    path = _require_attachment_path(attachment)
+
+    return FileResponse(
+        path,
+        media_type=attachment.media_type,
+        headers={
+            "Cache-Control": "private, no-store",
+            "Cross-Origin-Resource-Policy": "same-origin",
             "X-Content-Type-Options": "nosniff",
         },
     )
