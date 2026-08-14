@@ -2,7 +2,7 @@
 
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, FastAPI, HTTPException, Response, status
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from sqlalchemy import text
@@ -26,6 +26,12 @@ from .auth import (
 )
 from .config import get_settings
 from .database import engine, get_db
+from .login_security import (
+    check_login_rate_limit,
+    record_login_failure,
+    record_login_success,
+    request_source,
+)
 from .search import router as search_router
 from .workspace import router as workspace_router
 
@@ -79,6 +85,13 @@ def _current_user(context: AuthContext) -> CurrentUser:
     )
 
 
+def _login_error(status_code: int, detail: str, *, retry_after: int | None = None) -> HTTPException:
+    headers = {"Cache-Control": "no-store"}
+    if retry_after is not None:
+        headers["Retry-After"] = str(retry_after)
+    return HTTPException(status_code=status_code, detail=detail, headers=headers)
+
+
 @app.get("/health", tags=["system"])
 def health() -> dict[str, str]:
     """Return a dependency-free, non-sensitive process liveness response."""
@@ -121,18 +134,48 @@ def api_metadata() -> dict[str, str]:
 @api.post("/auth/login", response_model=CurrentUser, tags=["authentication"])
 def login(
     payload: LoginRequest,
+    request: Request,
     response: Response,
     db: Session = Depends(get_db),
 ) -> CurrentUser:
-    """Create an opaque browser session for an existing private account."""
+    """Create an opaque browser session with bounded abuse controls."""
+
+    source = request_source(request, settings)
+    preflight = check_login_rate_limit(
+        db,
+        source=source,
+        username=payload.username,
+        settings=settings,
+    )
+    if preflight.blocked:
+        db.commit()
+        raise _login_error(
+            status.HTTP_429_TOO_MANY_REQUESTS,
+            "login temporarily unavailable",
+            retry_after=preflight.retry_after_seconds,
+        )
 
     user = authenticate_user(db, username=payload.username, password=payload.password)
     if user is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="invalid username or password",
+        failure = record_login_failure(
+            db,
+            source=source,
+            username=payload.username,
+            settings=settings,
+        )
+        db.commit()
+        if failure.blocked:
+            raise _login_error(
+                status.HTTP_429_TOO_MANY_REQUESTS,
+                "login temporarily unavailable",
+                retry_after=failure.retry_after_seconds,
+            )
+        raise _login_error(
+            status.HTTP_401_UNAUTHORIZED,
+            "invalid username or password",
         )
 
+    record_login_success(db, source=source, username=payload.username)
     issued = issue_session(db, user=user, settings=settings)
     db.commit()
     set_session_cookies(response, issued, settings)
