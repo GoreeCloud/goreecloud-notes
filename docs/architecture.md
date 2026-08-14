@@ -54,7 +54,7 @@ Rich editing uses open-source Tiptap/ProseMirror while keeping GoreeCloud's stor
 
 FastAPI provides the versioned HTTP API. `/api/v1` is the first API namespace. Browser, web-clipper, and future mobile clients should use the same documented API contract instead of creating separate private backends.
 
-The backend owns authentication, authorization, document-schema validation, data validation, persistence rules, migration boundaries, notebook hierarchy rules, tag normalization, organizational filtering, search authorization, revision creation/restoration, Trash semantics, attachment authorization, inline attachment-reference validation, and reference-aware attachment deletion protection.
+The backend owns authentication, bounded login-abuse controls, trusted-proxy interpretation, authorization, document-schema validation, data validation, persistence rules, migration boundaries, notebook hierarchy rules, tag normalization, organizational filtering, search authorization, revision creation/restoration, Trash semantics, attachment authorization, inline attachment-reference validation, and reference-aware attachment deletion protection.
 
 ## Database
 
@@ -65,6 +65,7 @@ The current foundation schema directly represents GoreeCloud concepts rather tha
 - users;
 - user credentials;
 - opaque authentication sessions;
+- short-lived opaque login-rate buckets;
 - notebooks and notebook hierarchy;
 - notes;
 - tags and note-tag relationships;
@@ -76,7 +77,8 @@ The reviewed migration line is:
 - `0001_native_notes_schema`;
 - `0002_authentication`;
 - `0003_content_versions`;
-- `0004_full_text_search`.
+- `0004_full_text_search`;
+- `0005_login_abuse_controls`.
 
 CI performs a PostgreSQL upgrade/check/downgrade/upgrade/check round trip so migration reversibility and SQLAlchemy metadata agreement are validated against a real PostgreSQL instance.
 
@@ -138,13 +140,21 @@ The detailed contract is documented in `docs/attachments.md`.
 
 PDF/office-document preview, SVG sanitization, OCR, resumable/large-object upload, malware scanning/quarantine, final production object-storage policy, final production storage paths, storage quotas, reference-aware garbage collection after retention policy approval, and production backup/restore validation remain future gates.
 
-## Authentication and Authorization
+## Authentication, Login Protection, and Authorization
 
 The browser authentication model is implemented as individual accounts with opaque database-backed sessions. GoreeCloud Notes does not expose an open registration endpoint; accounts are created through an administrative server-side CLI.
 
 Password credentials are stored separately from account identity and use a salted, versioned `scrypt` password hash. Browser sessions use random opaque secrets. PostgreSQL stores only SHA-256 digests of the session and CSRF secrets, so the raw active browser secrets are not persisted.
 
 The browser receives an HTTP-only session cookie plus a CSRF cookie. Cookies use `SameSite=Strict`; `Secure` is enabled automatically outside development. Authenticated state-changing requests must pass the CSRF cookie value in the `X-CSRF-Token` header and match the stored digest. Logout deletes the server-side session.
+
+Authenticated password rotation requires the current password and CSRF, rejects reuse of the current password, updates `password_changed_at`, revokes every browser session for that account, and expires the initiating browser cookies. Private administrative recovery is available through `python -m app.cli reset-password`; it replaces the account credential and revokes every existing browser session in the same transaction without creating a public recovery endpoint or hosted identity dependency.
+
+Migration `0005_login_abuse_controls` adds short-lived login-rate buckets. The login path evaluates both source+normalized-account and source-wide failure scopes. Default development policy is a 5-minute window, 5 source+account failures, 20 source-wide failures, a 5-minute cooldown, and 24-hour state TTL. Thresholds are deployment settings, but cooldown is always temporary: the application does not permanently lock an account.
+
+Rate-state rows store opaque SHA-256-derived bucket keys plus scope/counter/timestamp state rather than clear username or source-address columns. The digests are a data-minimization measure, not a claim that low-entropy network addresses become anonymous. Successful login clears only the matching source+account bucket; source-wide history remains so username rotation does not trivially bypass the source-wide boundary.
+
+Forwarded source addresses are fail-closed. `X-Forwarded-For` is ignored unless the direct peer belongs to `GOREECLOUD_NOTES_TRUSTED_PROXY_CIDRS`, whose default is empty. A trusted chain selects the rightmost untrusted address; malformed chains fall back to the direct peer; invalid configured CIDRs fail configuration validation. Production proxy CIDRs remain a target-environment value that must be verified, not guessed in source.
 
 Authorization is server-side and owner-scoped. Notes, notebooks, tags, revisions, search filters, attachments, and inline attachment references are resolved against the authenticated user. The API deliberately returns the same not-found response for nonexistent objects and objects owned by another user where identifier opacity is appropriate so object IDs are not useful as an ownership-enumeration signal.
 
@@ -164,13 +174,14 @@ Milestone 0 retains revisions and exposes neither permanent note deletion nor in
 
 Live integration checks are stored in versioned scripts:
 
-- `scripts/ci_validate_auth.sh` validates account creation, login, current-session identity, CSRF rejection, authenticated logout, and session revocation;
+- `scripts/ci_validate_auth.sh` validates account creation, concurrent sessions, login/current-session identity, CSRF, password rotation, global session revocation, administrative password recovery, logout, and post-revocation behavior;
+- `scripts/ci_validate_login_security.sh` validates bounded source+account and source-wide cooldowns, `Retry-After`, automatic recovery, username-rotation resistance, and rejection of spoofed forwarded sources from an untrusted direct peer;
 - `scripts/ci_validate_workspace.sh` validates notebook hierarchy/cycle rules, normalized tag uniqueness, tag assignment/filtering, cross-user note/notebook/tag isolation, content versions, revision coalescing, stale-write rejection, conflict-safe revision restore, pinning, notebook deletion without note loss, tag cleanup, Archive/restore, and recoverable Trash;
-- `scripts/ci_validate_organization.sh` validates notebook rename/re-parent/reorder and ordered listing, tag rename/recolor/clear-color, normalized-name and assignment propagation, duplicate rejection, and cross-user mutation opacity;
+- `scripts/ci_validate_organization_management.sh` validates notebook rename/re-parent/reorder and ordered listing, tag rename/recolor/clear-color, normalized-name and assignment propagation, duplicate rejection, and cross-user mutation opacity;
 - `scripts/ci_validate_search.sh` validates indexed title/body/phrase/web-style queries, generated-vector refresh after edits, cross-user search isolation, and live generated-column/GIN-index presence;
 - `scripts/ci_validate_attachments.sh` validates private attachment upload/list/download/delete, checksum/size integrity, filename/path protections, CSRF enforcement, safe raster preview bytes and headers, cross-user opacity, non-root byte ownership, native inline-image reference validation, unsupported document rejection, and reference-aware deletion protection.
 
-Backend unit tests separately exercise document canonicalization, legacy compatibility, strict invalid-document rejection, and tolerant attachment-reference discovery.
+Backend unit tests separately exercise document canonicalization, legacy compatibility, strict invalid-document rejection, tolerant attachment-reference discovery, trusted/untrusted proxy source selection, malformed forwarded-chain fallback, CIDR validation, and opaque rate-key normalization.
 
 These checks execute against the same Docker Compose/PostgreSQL stack used by the workflow rather than a reduced mock persistence layer.
 
@@ -184,7 +195,7 @@ The application-owned document contract is separately versioned from the HTTP na
 
 The foundation Compose stack contains PostgreSQL and the API, plus a development attachment volume. PostgreSQL is not published to the host and the API is loopback-only. The frontend remains a Vite development process during this foundation phase.
 
-A production web-serving model, frontend image, Caddy route, final attachment storage path or object-storage decision, backup sources, restoration procedure, malware-scanning policy, and final Docker image digests require separate validation before deployment.
+A production web-serving model, frontend image, Caddy route, verified trusted-proxy CIDRs, final attachment storage path or object-storage decision, backup sources, restoration procedure, malware-scanning policy, and final Docker image digests require separate validation before deployment.
 
 ## Transitional Memos Boundary
 
