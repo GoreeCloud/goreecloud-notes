@@ -1,5 +1,6 @@
 """FastAPI entry point for native GoreeCloud Notes."""
 
+from datetime import datetime
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request, Response, status
@@ -18,8 +19,10 @@ from .auth import (
     clear_session_cookies,
     get_current_auth_context,
     issue_session,
+    list_active_user_sessions,
     replace_user_password,
     require_csrf,
+    revoke_other_user_sessions,
     revoke_session,
     set_session_cookies,
     verify_user_password,
@@ -76,6 +79,21 @@ class CurrentUser(BaseModel):
     id: UUID
     username: str
     display_name: str
+
+
+class BrowserSession(BaseModel):
+    """Non-secret browser-session metadata safe for the owning account to review."""
+
+    id: UUID
+    created_at: datetime
+    expires_at: datetime
+    current: bool
+
+
+class SessionRevocationResult(BaseModel):
+    """Result of an account-scoped selective session revocation."""
+
+    revoked: int
 
 
 def _current_user(context: AuthContext) -> CurrentUser:
@@ -193,6 +211,44 @@ def me(
 
     response.headers["Cache-Control"] = "no-store"
     return _current_user(context)
+
+
+@api.get("/auth/sessions", response_model=list[BrowserSession], tags=["authentication"])
+def browser_sessions(
+    response: Response,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(get_current_auth_context),
+) -> list[BrowserSession]:
+    """List the owning account's active browser sessions without secret or device data."""
+
+    response.headers["Cache-Control"] = "no-store"
+    return [
+        BrowserSession(
+            id=session.id,
+            created_at=session.created_at,
+            expires_at=session.expires_at,
+            current=session.id == context.session.id,
+        )
+        for session in list_active_user_sessions(db, context)
+    ]
+
+
+@api.post(
+    "/auth/sessions/revoke-others",
+    response_model=SessionRevocationResult,
+    tags=["authentication"],
+)
+def revoke_other_sessions(
+    response: Response,
+    db: Session = Depends(get_db),
+    context: AuthContext = Depends(require_csrf),
+) -> SessionRevocationResult:
+    """Sign out every other browser session while preserving the current one."""
+
+    revoked = revoke_other_user_sessions(db, context)
+    db.commit()
+    response.headers["Cache-Control"] = "no-store"
+    return SessionRevocationResult(revoked=revoked)
 
 
 @api.post("/auth/password", status_code=status.HTTP_204_NO_CONTENT, tags=["authentication"])
