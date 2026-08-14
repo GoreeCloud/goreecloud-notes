@@ -60,6 +60,8 @@
 
 .manager-create input,
 .manager-create select,
+.manager-edit input,
+.manager-edit select,
 .note-metadata-controls select {
   width: 100%;
   min-height: 39px;
@@ -84,7 +86,13 @@
   border-radius: 14px;
 }
 
-.manager-row > div:first-child {
+.manager-row.editing {
+  display: block;
+  padding: 14px;
+}
+
+.manager-row > div:first-child,
+.manager-summary {
   display: grid;
   min-width: 0;
   gap: 3px;
@@ -102,13 +110,34 @@
   font-size: 0.72rem;
 }
 
+.manager-summary-title {
+  display: flex;
+  min-width: 0;
+  gap: 7px;
+  align-items: center;
+}
+
+.manager-summary-title strong {
+  min-width: 0;
+}
+
+.tag-color-dot {
+  width: 9px;
+  height: 9px;
+  flex: 0 0 9px;
+  border: 1px solid rgba(104, 120, 144, 0.24);
+  border-radius: 999px;
+  background: transparent;
+}
+
 .manager-actions {
   display: flex;
   flex: 0 0 auto;
   gap: 5px;
 }
 
-.manager-actions button {
+.manager-actions button,
+.manager-edit button {
   padding: 6px 8px;
   border: 0;
   border-radius: 9px;
@@ -118,9 +147,66 @@
   font-size: 0.72rem;
 }
 
-.manager-actions button:hover:not(:disabled) {
+.manager-actions button:hover:not(:disabled),
+.manager-edit button:hover:not(:disabled) {
   color: #174fb8;
   background: rgba(220, 232, 253, 0.82);
+}
+
+.manager-edit {
+  display: grid;
+  gap: 11px;
+}
+
+.manager-edit-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 96px;
+  gap: 9px;
+}
+
+.manager-edit-grid.tag-grid {
+  grid-template-columns: minmax(0, 1fr) minmax(150px, 0.55fr);
+}
+
+.manager-field {
+  display: grid;
+  gap: 5px;
+}
+
+.manager-field > span {
+  color: #748095;
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.manager-edit-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.manager-edit-actions .primary-button {
+  color: #fff;
+  background: #2f6fed;
+}
+
+.manager-color-control {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  gap: 7px;
+  align-items: center;
+}
+
+.manager-color-control input[type="color"] {
+  min-height: 39px;
+  padding: 4px;
+  cursor: pointer;
+}
+
+.manager-color-control button {
+  min-height: 39px;
 }
 
 .note-card-heading {
@@ -167,6 +253,9 @@
 }
 
 .tag-chip {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
   padding: 5px 9px;
   border: 1px solid rgba(126, 145, 169, 0.18);
   border-radius: 999px;
@@ -200,7 +289,9 @@
 }
 
 @media (max-width: 760px) {
-  .note-metadata-controls {
+  .note-metadata-controls,
+  .manager-edit-grid,
+  .manager-edit-grid.tag-grid {
     grid-template-columns: 1fr;
   }
 
@@ -214,7 +305,8 @@
     display: grid;
   }
 
-  .manager-actions {
+  .manager-actions,
+  .manager-edit-actions {
     justify-content: flex-end;
   }
 }
@@ -244,6 +336,8 @@
 
   .manager-create input,
   .manager-create select,
+  .manager-edit input,
+  .manager-edit select,
   .note-metadata-controls select {
     border-color: rgba(206, 220, 240, 0.12);
     color: #e8edf6;
@@ -251,6 +345,7 @@
   }
 
   .manager-row span,
+  .manager-field > span,
   .note-metadata-controls label > span,
   .tag-assignment > span,
   .no-tags {
@@ -258,12 +353,19 @@
   }
 
   .manager-actions button,
+  .manager-edit button,
   .tag-chip {
     color: #aab6c8;
     background: rgba(31, 42, 57, 0.88);
   }
 
+  .manager-edit-actions .primary-button {
+    color: #f6f8fc;
+    background: #315ea8;
+  }
+
   .manager-actions button:hover:not(:disabled),
+  .manager-edit button:hover:not(:disabled),
   .tag-chip:hover:not(:disabled),
   .tag-chip.assigned {
     color: #a9c4ff;
