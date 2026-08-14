@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+from datetime import datetime
 from pathlib import Path
 from uuid import UUID, uuid4
 
@@ -34,8 +35,8 @@ class AttachmentView(BaseModel):
     media_type: str
     size_bytes: int
     sha256: str
-    created_at: object
-    updated_at: object
+    created_at: datetime
+    updated_at: datetime
 
 
 def _require_owned_note(db: Session, *, owner_id: UUID, note_id: UUID) -> Note:
