@@ -72,10 +72,11 @@ def reset_password(*, username: str, password_stdin: bool) -> None:
         if user is None:
             raise ValueError("Account not found.")
 
+        account_name = user.username
         replace_user_password(db, user=user, new_password=password)
         db.commit()
 
-    print(f"Reset GoreeCloud Notes password and revoked all sessions: {user.username}")
+    print(f"Reset GoreeCloud Notes password and revoked all sessions: {account_name}")
 
 
 def build_parser() -> argparse.ArgumentParser:
