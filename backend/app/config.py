@@ -1,9 +1,10 @@
 """Environment-backed configuration for GoreeCloud Notes."""
 
 from functools import lru_cache
+from ipaddress import IPv4Network, IPv6Network, ip_network
 from pathlib import Path
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy.engine import URL
 
@@ -30,6 +31,13 @@ class Settings(BaseSettings):
     attachment_root: str = Field(default="./data/attachments")
     attachment_max_bytes: int = Field(default=52_428_800, ge=1_048_576, le=1_073_741_824)
 
+    login_rate_window_seconds: int = Field(default=300, ge=30, le=3_600)
+    login_rate_account_failures: int = Field(default=5, ge=2, le=100)
+    login_rate_source_failures: int = Field(default=20, ge=3, le=500)
+    login_rate_cooldown_seconds: int = Field(default=300, ge=1, le=86_400)
+    login_rate_state_ttl_seconds: int = Field(default=86_400, ge=300, le=2_592_000)
+    trusted_proxy_cidrs: str = Field(default="")
+
     database_host: str = Field(default="127.0.0.1")
     database_port: int = Field(default=5432)
     database_name: str = Field(default="goreecloud_notes")
@@ -37,9 +45,26 @@ class Settings(BaseSettings):
     database_password: str = Field(default="development-only")
     database_password_file: str | None = Field(default=None)
 
+    @field_validator("trusted_proxy_cidrs")
+    @classmethod
+    def validate_trusted_proxy_cidrs(cls, value: str) -> str:
+        for raw_cidr in value.split(","):
+            cidr = raw_cidr.strip()
+            if cidr:
+                ip_network(cidr, strict=False)
+        return value
+
     @property
     def cors_origins(self) -> list[str]:
         return [origin.strip() for origin in self.allowed_origins.split(",") if origin.strip()]
+
+    @property
+    def trusted_proxy_networks(self) -> tuple[IPv4Network | IPv6Network, ...]:
+        return tuple(
+            ip_network(raw_cidr.strip(), strict=False)
+            for raw_cidr in self.trusted_proxy_cidrs.split(",")
+            if raw_cidr.strip()
+        )
 
     @property
     def secure_cookies(self) -> bool:
