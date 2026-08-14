@@ -13,7 +13,8 @@ from .auth import hash_password, normalize_username, replace_user_password, vali
 from .config import get_settings
 from .database import SessionLocal
 from .models import User, UserCredential
-from .portability import ExportError, export_user_library, verify_export_bundle
+from .portability import ExportError, verify_export_bundle
+from .portability_migration import export_user_library_with_provenance
 
 
 def _read_password(password_stdin: bool) -> str:
@@ -83,7 +84,7 @@ def reset_password(*, username: str, password_stdin: bool) -> None:
 
 
 def export_library(*, username: str, output: str, overwrite: bool) -> None:
-    """Create a complete, verified native library bundle for one account."""
+    """Create a complete verified native library bundle, including migration provenance."""
 
     normalized = normalize_username(username)
     if not normalized:
@@ -96,7 +97,7 @@ def export_library(*, username: str, output: str, overwrite: bool) -> None:
         if user is None:
             raise ValueError("Account not found.")
 
-        result = export_user_library(
+        result = export_user_library_with_provenance(
             db,
             owner=user,
             attachment_root=Path(settings.attachment_root),
@@ -151,7 +152,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     export = subparsers.add_parser(
         "export-library",
-        help="Create a verified ZIP bundle containing one account's native library and attachment bytes.",
+        help=(
+            "Create a verified ZIP bundle containing one account's native library, attachment bytes, "
+            "and any preserved migration provenance."
+        ),
     )
     export.add_argument("--username", required=True)
     export.add_argument("--output", required=True, help="Destination ZIP path.")
