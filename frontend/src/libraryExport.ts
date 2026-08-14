@@ -66,15 +66,15 @@ export async function downloadLibraryExport(): Promise<LibraryExportDownload> {
 
 export function saveLibraryExport(download: LibraryExportDownload): void {
   const url = URL.createObjectURL(download.blob);
-  try {
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = download.filename;
-    anchor.rel = "noopener";
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-  } finally {
-    URL.revokeObjectURL(url);
-  }
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = download.filename;
+  anchor.rel = "noopener";
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+
+  // Give the browser time to resolve the download before releasing the object URL.
+  // Immediate revocation can cancel or truncate downloads in some browser engines.
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
