@@ -1,4 +1,9 @@
-import { emptyDocument, sanitizeDocument, type NoteDocument } from "./document";
+import {
+  documentToPlainText,
+  emptyDocument,
+  sanitizeDocument,
+  type NoteDocument,
+} from "./document";
 
 export type { NoteDocument } from "./document";
 
@@ -122,6 +127,29 @@ async function apiFetch<T>(
 
 function normalizeNote(note: Note): Note {
   return { ...note, document: sanitizeDocument(note.document) };
+}
+
+export function documentToText(document: NoteDocument): string {
+  return documentToPlainText(document);
+}
+
+export function textToDocument(text: string): NoteDocument {
+  const normalized = text.replace(/\r\n?/g, "\n");
+  const paragraphs = normalized.split(/\n{2,}/).map((value) => value.trimEnd());
+  const blocks = paragraphs
+    .filter((value, index) => value.length > 0 || index === 0)
+    .map((value) => ({
+      type: "paragraph" as const,
+      content: value.length > 0
+        ? [{ type: "text" as const, text: value.replace(/\n/g, " ") }]
+        : [],
+    }));
+
+  return {
+    format: "goreecloud.blocks",
+    version: 1,
+    blocks,
+  };
 }
 
 export function getCurrentUser(): Promise<CurrentUser> {
