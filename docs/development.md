@@ -33,9 +33,11 @@ python -m compileall -q app migrations
 
 ## Frontend
 
+For a clean install from the reviewed dependency graph:
+
 ```bash
 cd frontend
-npm install
+npm ci
 npm run lint
 npm run build
 npm run dev
@@ -43,7 +45,9 @@ npm run dev
 
 The default frontend address is `http://127.0.0.1:5173` and Vite proxies `/api` and `/health` to the local backend.
 
-The foundation branch intentionally pins direct frontend dependency versions in `package.json`, but a committed npm lockfile remains an outstanding Milestone 0 task. Do not describe frontend dependency locking as complete until `package-lock.json` is generated, reviewed, committed, and CI changes to `npm ci`.
+Direct frontend dependency versions are pinned in `package.json`, and the resolved npm dependency graph is committed in `frontend/package-lock.json`. Continuous Integration uses `npm ci` so a mismatch between the manifest and lockfile fails instead of silently rewriting the dependency graph.
+
+When intentionally changing frontend dependencies, use the appropriate `npm install` command to update both `package.json` and `package-lock.json`, review the resulting lockfile diff, and commit the two files together. Do not hand-edit npm integrity hashes or resolved transitive versions.
 
 ## Docker Development
 
