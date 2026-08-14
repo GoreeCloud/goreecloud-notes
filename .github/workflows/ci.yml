@@ -127,6 +127,9 @@ jobs:
       - name: Validate organization, ownership, revisions, and note lifecycle
         run: bash scripts/ci_validate_workspace.sh
 
+      - name: Validate richer notebook and tag management
+        run: bash scripts/ci_validate_organization_management.sh
+
       - name: Validate PostgreSQL full-text search and isolation
         run: bash scripts/ci_validate_search.sh
 
