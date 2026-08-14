@@ -36,6 +36,10 @@ services:
       - .env
     secrets:
       - postgres_password
+    # File-backed Compose secrets retain the source file's numeric group.
+    # Grant the non-root API process only that supplementary group.
+    group_add:
+      - "${APP_SECRET_GID:-20001}"
     depends_on:
       db:
         condition: service_healthy
