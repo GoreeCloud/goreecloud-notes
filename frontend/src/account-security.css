@@ -1,0 +1,205 @@
+.account-security-launcher {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 80;
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.6rem;
+  padding: 0.62rem 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface-strong) 88%, transparent);
+  box-shadow: var(--shadow-soft);
+  color: var(--text);
+  font-size: 0.84rem;
+  font-weight: 700;
+  text-decoration: none;
+  backdrop-filter: blur(22px) saturate(1.15);
+  -webkit-backdrop-filter: blur(22px) saturate(1.15);
+}
+
+.account-security-launcher:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.account-security-launcher:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--accent) 40%, transparent);
+  outline-offset: 2px;
+}
+
+.account-security-page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 2rem 1rem;
+  background:
+    radial-gradient(circle at 15% 10%, color-mix(in srgb, var(--accent) 11%, transparent), transparent 34rem),
+    radial-gradient(circle at 85% 80%, color-mix(in srgb, var(--accent) 8%, transparent), transparent 30rem),
+    var(--bg);
+}
+
+.account-security-card {
+  width: min(720px, 100%);
+  border: 1px solid var(--border);
+  border-radius: 28px;
+  padding: clamp(1.15rem, 4vw, 2rem);
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  box-shadow: var(--shadow-strong);
+  backdrop-filter: blur(28px) saturate(1.18);
+  -webkit-backdrop-filter: blur(28px) saturate(1.18);
+}
+
+.account-security-heading-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1.25rem;
+  margin-bottom: 1.5rem;
+}
+
+.account-security-heading-row h1,
+.account-security-section-heading h2 {
+  margin: 0;
+}
+
+.account-security-intro,
+.account-security-section-heading p,
+.account-security-identity span,
+.field-guidance {
+  color: var(--muted);
+}
+
+.account-security-intro {
+  max-width: 58ch;
+  margin: 0.6rem 0 0;
+  line-height: 1.55;
+}
+
+.account-security-identity {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.9rem 1rem;
+  margin-bottom: 1.25rem;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: var(--surface-soft);
+}
+
+.account-security-identity > div:last-child {
+  display: grid;
+  gap: 0.18rem;
+}
+
+.account-security-form {
+  display: grid;
+  gap: 1rem;
+}
+
+.account-security-form label {
+  display: grid;
+  gap: 0.45rem;
+  color: var(--text);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.account-security-form input {
+  width: 100%;
+  min-height: 3rem;
+  border: 1px solid var(--border);
+  border-radius: 15px;
+  padding: 0.75rem 0.85rem;
+  background: var(--surface-strong);
+  color: var(--text);
+  font: inherit;
+}
+
+.account-security-form input:focus {
+  border-color: var(--accent);
+  outline: 3px solid color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.account-security-form input:disabled {
+  opacity: 0.68;
+  cursor: not-allowed;
+}
+
+.account-security-section-heading {
+  display: grid;
+  gap: 0.45rem;
+  margin-bottom: 0.15rem;
+}
+
+.account-security-section-heading p,
+.field-guidance {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.field-guidance {
+  margin-top: -0.55rem;
+  font-size: 0.82rem;
+}
+
+.account-security-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 0.35rem;
+}
+
+.account-security-status {
+  display: grid;
+  gap: 0.55rem;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: var(--surface-soft);
+  line-height: 1.5;
+}
+
+.account-security-error,
+.account-security-inline-error {
+  color: var(--danger);
+}
+
+.account-security-inline-error {
+  margin: 0;
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+.account-security-signin {
+  justify-self: start;
+  margin-top: 0.35rem;
+}
+
+@media (max-width: 640px) {
+  .account-security-page {
+    align-items: start;
+    padding: 1rem 0.75rem 5rem;
+  }
+
+  .account-security-card {
+    border-radius: 22px;
+  }
+
+  .account-security-heading-row {
+    flex-direction: column;
+  }
+
+  .account-security-heading-row .secondary-button {
+    width: 100%;
+  }
+
+  .account-security-actions .primary-button {
+    width: 100%;
+  }
+
+  .account-security-launcher {
+    right: 0.75rem;
+    bottom: 0.75rem;
+  }
+}
