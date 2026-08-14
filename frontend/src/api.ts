@@ -249,6 +249,16 @@ export async function listNotes(options: NoteListOptions = {}): Promise<Note[]> 
   return (await apiFetch<Note[]>(`/notes?${params.toString()}`)).map(normalizeNote);
 }
 
+export async function searchNotes(options: NoteListOptions & { query: string }): Promise<Note[]> {
+  const query = options.query.trim();
+  if (!query) return [];
+
+  const params = new URLSearchParams({ q: query, state: options.state ?? "normal" });
+  if (options.notebookId) params.set("notebook_id", options.notebookId);
+  if (options.tagId) params.set("tag_id", options.tagId);
+  return (await apiFetch<Note[]>(`/search/notes?${params.toString()}`)).map(normalizeNote);
+}
+
 export async function createNote(notebookId: string | null = null): Promise<Note> {
   return normalizeNote(
     await apiFetch<Note>(
