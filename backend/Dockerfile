@@ -21,7 +21,8 @@ RUN useradd \
     --shell /usr/sbin/nologin \
     goreecloud
 
-RUN chown -R goreecloud:goreecloud /app
+RUN mkdir -p /var/lib/goreecloud-notes/attachments \
+    && chown -R goreecloud:goreecloud /app /var/lib/goreecloud-notes
 USER goreecloud
 
 EXPOSE 8000
