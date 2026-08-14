@@ -28,7 +28,13 @@ function Root() {
   return (
     <>
       <App />
-      <a className="account-security-launcher" href="#account-security">
+      <a
+        className="account-security-launcher"
+        href="#account-security"
+        target="_blank"
+        rel="noopener"
+        title="Open Account & Security in a new tab so the current Notes draft remains open"
+      >
         Account &amp; Security
       </a>
     </>
