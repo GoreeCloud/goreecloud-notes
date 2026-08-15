@@ -201,6 +201,9 @@ jobs:
       - name: Validate private authentication and CSRF flow
         run: bash scripts/ci_validate_auth.sh
 
+      - name: Validate append-only administrative audit lifecycle
+        run: bash scripts/ci_validate_admin_audit.sh
+
       - name: Validate bounded login abuse controls and proxy boundary
         run: bash scripts/ci_validate_login_security.sh
 
