@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, String, Uuid, func, select, text
+from sqlalchemy import CheckConstraint, DateTime, Index, String, Uuid, func, select, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, Session, mapped_column
 
@@ -25,6 +25,10 @@ MAX_AUDIT_RESULTS = 200
 
 class AdminAuditEvent(Base):
     """Immutable accountability record for a privileged local account operation.
+
+    The target user UUID and username are snapshots rather than a foreign-key
+    relationship. That preserves the audit record byte-for-byte even if a future,
+    separately approved account-deletion workflow removes the user record.
 
     The database migration adds a PostgreSQL trigger that rejects ordinary UPDATE
     and DELETE operations. The event intentionally stores no credential material,
@@ -42,12 +46,7 @@ class AdminAuditEvent(Base):
     )
 
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
-    target_user_id: Mapped[UUID | None] = mapped_column(
-        Uuid,
-        ForeignKey("users.id", ondelete="SET NULL"),
-        nullable=True,
-        index=True,
-    )
+    target_user_id: Mapped[UUID] = mapped_column(Uuid, nullable=False, index=True)
     target_username: Mapped[str] = mapped_column(String(64), nullable=False)
     action: Mapped[str] = mapped_column(String(64), nullable=False)
     operator_identifier: Mapped[str] = mapped_column(String(MAX_OPERATOR_IDENTIFIER_LENGTH), nullable=False)
