@@ -158,6 +158,7 @@ jobs:
           GOREECLOUD_NOTES_LOGIN_RATE_COOLDOWN_SECONDS=2
           GOREECLOUD_NOTES_LOGIN_RATE_STATE_TTL_SECONDS=300
           EOF
+          sed -i 's/^GOREECLOUD_NOTES_ATTACHMENT_USER_QUOTA_BYTES=.*/GOREECLOUD_NOTES_ATTACHMENT_USER_QUOTA_BYTES=65536/' .env
           mkdir -p secrets
           printf '%s\n' 'ci-only-postgres-password' > secrets/postgres_password
           sudo chgrp 20001 secrets/postgres_password
@@ -214,6 +215,9 @@ jobs:
 
       - name: Validate private attachment storage and authorization
         run: bash scripts/ci_validate_attachments.sh
+
+      - name: Validate owner-scoped attachment storage quota
+        run: bash scripts/ci_validate_attachment_quota.sh
 
       - name: Validate read-only attachment storage integrity audit
         run: bash scripts/ci_validate_attachment_integrity.sh
