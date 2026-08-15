@@ -8,6 +8,7 @@ import "./organization.css";
 import "./rich-editor.css";
 import "./attachments.css";
 import "./account-security.css";
+import "./glaze-foundation.css";
 
 function Root() {
   const [hash, setHash] = useState(window.location.hash);
