@@ -53,6 +53,7 @@ jobs:
           GOREECLOUD_NOTES_ALLOWED_ORIGINS: https://notes.example.invalid
           GOREECLOUD_NOTES_TRUSTED_PROXY_CIDRS: 10.20.30.0/24
           GOREECLOUD_NOTES_ATTACHMENT_ROOT: /tmp/goreecloud-notes-production-attachments
+          GOREECLOUD_NOTES_ATTACHMENT_USER_QUOTA_BYTES: 104857600
           GOREECLOUD_NOTES_DATABASE_PASSWORD_FILE: /tmp/goreecloud-notes-production-db-secret
         run: |
           python -m app.production_check --json > /tmp/goreecloud-notes-production-preflight.json
@@ -66,6 +67,7 @@ jobs:
           assert report['schemaVersion'] == 1
           assert report['status'] == 'pass'
           assert all(report['checks'].values())
+          assert report['checks']['attachmentUserQuotaConfigured'] is True
           assert report['nonDestructive'] is True
           assert report['liveDependencyValidationPerformed'] is False
           assert report['productionApprovalGranted'] is False
@@ -77,6 +79,7 @@ jobs:
           GOREECLOUD_NOTES_ALLOWED_ORIGINS: http://localhost:5173
           GOREECLOUD_NOTES_TRUSTED_PROXY_CIDRS: ""
           GOREECLOUD_NOTES_ATTACHMENT_ROOT: ./data/attachments
+          GOREECLOUD_NOTES_ATTACHMENT_USER_QUOTA_BYTES: 0
           GOREECLOUD_NOTES_DATABASE_PASSWORD_FILE: ""
         run: |
           set +e
@@ -93,6 +96,7 @@ jobs:
 
           assert report['status'] == 'fail'
           assert report['configurationErrors']
+          assert any('attachment user quota' in message for message in report['configurationErrors'])
           assert report['nonDestructive'] is True
           assert report['liveDependencyValidationPerformed'] is False
           assert report['productionApprovalGranted'] is False
