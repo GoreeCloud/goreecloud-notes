@@ -11,7 +11,7 @@ from uuid import UUID, uuid4
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -19,7 +19,7 @@ from .auth import AuthContext, get_current_auth_context, require_csrf
 from .config import get_settings
 from .database import get_db
 from .documents import SAFE_INLINE_IMAGE_MEDIA_TYPES, attachment_image_ids
-from .models import Attachment, Note, NoteRevision
+from .models import Attachment, Note, NoteRevision, User
 
 router = APIRouter(tags=["attachments"])
 settings = get_settings()
@@ -125,6 +125,33 @@ def _attachment_is_referenced(db: Session, *, attachment: Attachment) -> bool:
     return any(attachment.id in attachment_image_ids(document) for document in revision_documents)
 
 
+def _enforce_owner_storage_quota(db: Session, *, owner_id: UUID, incoming_size: int) -> None:
+    """Serialize per-owner quota decisions before attachment metadata is committed.
+
+    The user identity row is the stable lock target. Concurrent uploads may stream to
+    separate temporary files, but only one upload for an owner can make the final quota
+    decision at a time. This prevents two requests from both observing the same stale
+    usage total and committing past the configured owner quota.
+    """
+
+    quota_bytes = settings.attachment_user_quota_bytes
+    if quota_bytes <= 0:
+        return
+
+    owner = db.scalar(select(User.id).where(User.id == owner_id).with_for_update())
+    if owner is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="authentication required")
+
+    used_bytes = db.scalar(
+        select(func.coalesce(func.sum(Attachment.size_bytes), 0)).where(Attachment.owner_id == owner_id)
+    )
+    if int(used_bytes or 0) + incoming_size > quota_bytes:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="attachment storage quota exceeded",
+        )
+
+
 @router.get("/notes/{note_id}/attachments", response_model=list[AttachmentView])
 def list_attachments(
     note_id: UUID,
@@ -158,7 +185,8 @@ async def upload_attachment(
     """Stream one attachment into owner-scoped private filesystem storage.
 
     The client-supplied filename is metadata only. Filesystem locations are generated
-    exclusively by the server and never derive from the filename.
+    exclusively by the server and never derive from the filename. A configured owner
+    quota is enforced after streaming and before the temporary file becomes durable.
     """
 
     _require_owned_note(db, owner_id=context.user.id, note_id=note_id)
@@ -199,6 +227,7 @@ async def upload_attachment(
         if size_bytes == 0:
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="empty attachments are not accepted")
 
+        _enforce_owner_storage_quota(db, owner_id=context.user.id, incoming_size=size_bytes)
         os.replace(temporary_path, final_path)
         attachment = Attachment(
             id=attachment_id,
@@ -216,6 +245,7 @@ async def upload_attachment(
         db.refresh(attachment)
         return attachment
     except HTTPException:
+        db.rollback()
         temporary_path.unlink(missing_ok=True)
         final_path.unlink(missing_ok=True)
         raise
