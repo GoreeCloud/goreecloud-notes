@@ -12,6 +12,7 @@ def _production_settings(**overrides: object) -> Settings:
         "allowed_origins": "https://notes.goreecloud.com",
         "trusted_proxy_cidrs": "10.20.30.0/24",
         "attachment_root": "/var/lib/goreecloud-notes/attachments",
+        "attachment_user_quota_bytes": 104_857_600,
         "database_password_file": "/run/secrets/postgres_password",
     }
     values.update(overrides)
@@ -25,6 +26,7 @@ def test_development_defaults_remain_explicitly_permitted() -> None:
     assert settings.secure_cookies is False
     assert settings.trusted_proxy_networks == ()
     assert settings.cors_origins == ["http://127.0.0.1:5173", "http://localhost:5173"]
+    assert settings.attachment_user_quota_bytes == 0
 
 
 def test_production_accepts_explicit_private_publication_boundary() -> None:
@@ -34,6 +36,7 @@ def test_production_accepts_explicit_private_publication_boundary() -> None:
     assert settings.secure_cookies is True
     assert settings.cors_origins == ["https://notes.goreecloud.com"]
     assert len(settings.trusted_proxy_networks) == 1
+    assert settings.attachment_user_quota_bytes == 104_857_600
 
 
 @pytest.mark.parametrize(
@@ -44,6 +47,8 @@ def test_production_accepts_explicit_private_publication_boundary() -> None:
         ({"allowed_origins": "https://127.0.0.1"}, "must not use loopback"),
         ({"trusted_proxy_cidrs": ""}, "trusted proxy CIDRs"),
         ({"attachment_root": "./attachments"}, "attachment_root must be an absolute path"),
+        ({"attachment_user_quota_bytes": 0}, "positive attachment user quota"),
+        ({"attachment_user_quota_bytes": 10_485_760}, "must be at least attachment_max_bytes"),
         ({"database_password_file": None}, "requires database_password_file"),
         ({"database_password_file": "secrets/postgres_password"}, "database_password_file must be an absolute path"),
     ],
