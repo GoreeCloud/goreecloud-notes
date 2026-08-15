@@ -2,13 +2,14 @@
 
 from sqlalchemy import CheckConstraint, UniqueConstraint
 
-from app import login_security, models  # noqa: F401
+from app import admin_audit, login_security, models  # noqa: F401
 from app.database import Base
 from app.migration import persistence  # noqa: F401
 
 
 def test_native_core_tables_are_registered() -> None:
     assert set(Base.metadata.tables) == {
+        "admin_audit_events",
         "attachments",
         "auth_sessions",
         "login_rate_buckets",
@@ -48,6 +49,35 @@ def test_authentication_tables_do_not_store_raw_browser_secrets() -> None:
     assert "csrf_token" not in sessions.c
     assert "password_hash" in credentials.c
     assert "password" not in credentials.c
+
+
+def test_admin_audit_keeps_minimal_immutable_identity_snapshots() -> None:
+    audit_events = Base.metadata.tables["admin_audit_events"]
+
+    assert {
+        "id",
+        "target_user_id",
+        "target_username",
+        "action",
+        "operator_identifier",
+        "reason",
+        "details",
+        "created_at",
+    } == set(audit_events.c.keys())
+    assert audit_events.c.target_user_id.nullable is False
+    assert not audit_events.c.target_user_id.foreign_keys
+    assert "updated_at" not in audit_events.c
+
+    for prohibited in (
+        "password",
+        "password_hash",
+        "session_token",
+        "csrf_token",
+        "ip_address",
+        "note_content",
+        "attachment_path",
+    ):
+        assert prohibited not in audit_events.c
 
 
 def test_login_rate_state_keeps_only_opaque_bucket_signals() -> None:
