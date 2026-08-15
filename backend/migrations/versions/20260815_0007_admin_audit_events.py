@@ -25,7 +25,9 @@ def upgrade() -> None:
     op.create_table(
         "admin_audit_events",
         sa.Column("id", sa.Uuid(), nullable=False),
-        sa.Column("target_user_id", sa.Uuid(), nullable=True),
+        # Deliberately not a foreign key: the audit target identity is an immutable
+        # snapshot and must survive any future, separately approved user deletion.
+        sa.Column("target_user_id", sa.Uuid(), nullable=False),
         sa.Column("target_username", sa.String(length=64), nullable=False),
         sa.Column("action", sa.String(length=64), nullable=False),
         sa.Column("operator_identifier", sa.String(length=120), nullable=False),
@@ -47,7 +49,6 @@ def upgrade() -> None:
             name="ck_admin_audit_operator_nonempty",
         ),
         sa.CheckConstraint("char_length(reason) > 0", name="ck_admin_audit_reason_nonempty"),
-        sa.ForeignKeyConstraint(["target_user_id"], ["users.id"], ondelete="SET NULL"),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(
