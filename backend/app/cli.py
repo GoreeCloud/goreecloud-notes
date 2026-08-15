@@ -11,6 +11,12 @@ from pathlib import Path
 
 from sqlalchemy import func, select
 
+from .admin_audit import (
+    AdminAuditContext,
+    list_admin_audit_events,
+    record_admin_audit_event,
+    resolve_admin_audit_context,
+)
 from .attachment_audit import audit_user_attachment_store
 from .auth import (
     hash_password,
@@ -47,7 +53,40 @@ def _normalized_required_username(username: str) -> str:
     return normalized
 
 
-def create_user(*, username: str, display_name: str, password_stdin: bool) -> None:
+def _admin_audit_context(args: argparse.Namespace) -> AdminAuditContext | None:
+    """Resolve CLI-supplied accountability metadata for a privileged mutation."""
+
+    return resolve_admin_audit_context(
+        operator_identifier=args.operator,
+        reason=args.reason,
+        production_required=get_settings().is_production,
+    )
+
+
+def _add_admin_audit_arguments(command: argparse.ArgumentParser) -> None:
+    command.add_argument(
+        "--operator",
+        help=(
+            "Non-secret administrative operator identifier. Required with --reason in production. "
+            "This is an asserted operational identity, not a password or token."
+        ),
+    )
+    command.add_argument(
+        "--reason",
+        help=(
+            "Non-secret reason for the administrative action. Required with --operator in production; "
+            "do not include credentials, note content, recovery codes, or other secrets."
+        ),
+    )
+
+
+def create_user(
+    *,
+    username: str,
+    display_name: str,
+    password_stdin: bool,
+    audit_context: AdminAuditContext | None = None,
+) -> None:
     normalized = normalize_username(username)
     clean_username = username.strip()
     clean_display_name = display_name.strip()
@@ -74,6 +113,13 @@ def create_user(*, username: str, display_name: str, password_stdin: bool) -> No
         db.add(user)
         db.flush()
         db.add(UserCredential(user_id=user.id, password_hash=password_hash))
+        record_admin_audit_event(
+            db,
+            action="account.create",
+            context=audit_context,
+            target_user=user,
+            details={"accountCreated": True},
+        )
         db.commit()
 
     print(f"Created GoreeCloud Notes account: {clean_username}")
@@ -116,7 +162,13 @@ def account_status(*, username: str, json_output: bool) -> None:
     print(f"Active browser sessions: {result['activeSessions']}")
 
 
-def set_account_active(*, username: str, is_active: bool, confirm_disable: bool) -> None:
+def set_account_active(
+    *,
+    username: str,
+    is_active: bool,
+    confirm_disable: bool,
+    audit_context: AdminAuditContext | None = None,
+) -> None:
     """Enable or disable one account without deleting its credentials or user data."""
 
     if not is_active and not confirm_disable:
@@ -130,6 +182,16 @@ def set_account_active(*, username: str, is_active: bool, confirm_disable: bool)
 
         account_name = user.username
         changed, revoked_sessions = set_user_active_state(db, user=user, is_active=is_active)
+        record_admin_audit_event(
+            db,
+            action="account.enable" if is_active else "account.disable",
+            context=audit_context,
+            target_user=user,
+            details={
+                "stateChanged": changed,
+                "revokedSessions": revoked_sessions,
+            },
+        )
         db.commit()
 
     if is_active:
@@ -157,7 +219,12 @@ def set_account_active(*, username: str, is_active: bool, confirm_disable: bool)
         )
 
 
-def reset_password(*, username: str, password_stdin: bool) -> None:
+def reset_password(
+    *,
+    username: str,
+    password_stdin: bool,
+    audit_context: AdminAuditContext | None = None,
+) -> None:
     """Replace one account password and revoke all existing browser sessions."""
 
     normalized = _normalized_required_username(username)
@@ -170,9 +237,60 @@ def reset_password(*, username: str, password_stdin: bool) -> None:
 
         account_name = user.username
         replace_user_password(db, user=user, new_password=password)
+        record_admin_audit_event(
+            db,
+            action="credential.reset",
+            context=audit_context,
+            target_user=user,
+            details={"allSessionsRevoked": True},
+        )
         db.commit()
 
     print(f"Reset GoreeCloud Notes password and revoked all sessions: {account_name}")
+
+
+def admin_audit(*, username: str | None, limit: int, json_output: bool) -> None:
+    """Read bounded, non-secret administrative audit history from PostgreSQL."""
+
+    normalized = _normalized_required_username(username) if username is not None else None
+    with SessionLocal() as db:
+        target_user_id = None
+        if normalized is not None:
+            user = db.scalar(select(User).where(User.username_normalized == normalized))
+            if user is None:
+                raise ValueError("Account not found.")
+            target_user_id = user.id
+
+        events = list_admin_audit_events(db, target_user_id=target_user_id, limit=limit)
+        result = {
+            "schemaVersion": 1,
+            "events": [
+                {
+                    "id": str(event.id),
+                    "action": event.action,
+                    "operator": event.operator_identifier,
+                    "reason": event.reason,
+                    "targetUsername": event.target_username,
+                    "createdAt": event.created_at.isoformat(),
+                    "details": event.details,
+                }
+                for event in events
+            ],
+        }
+
+    if json_output:
+        print(json.dumps(result, ensure_ascii=False, sort_keys=True, separators=(",", ":")))
+        return
+
+    if not result["events"]:
+        print("No administrative audit events found.")
+        return
+
+    for event in result["events"]:
+        print(
+            f"{event['createdAt']} | {event['action']} | {event['targetUsername']} | "
+            f"operator={event['operator']} | reason={event['reason']}"
+        )
 
 
 def audit_attachments(*, username: str, json_output: bool) -> bool:
@@ -303,6 +421,7 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Read one password line from standard input instead of prompting interactively.",
     )
+    _add_admin_audit_arguments(create)
 
     status_command = subparsers.add_parser(
         "account-status",
@@ -326,12 +445,14 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Required explicit acknowledgement before disabling the selected account.",
     )
+    _add_admin_audit_arguments(disable)
 
     enable = subparsers.add_parser(
         "enable-user",
         help="Re-enable one private account while requiring a fresh browser sign-in.",
     )
     enable.add_argument("--username", required=True)
+    _add_admin_audit_arguments(enable)
 
     reset = subparsers.add_parser(
         "reset-password",
@@ -342,6 +463,28 @@ def build_parser() -> argparse.ArgumentParser:
         "--password-stdin",
         action="store_true",
         help="Read one replacement password line from standard input instead of prompting interactively.",
+    )
+    _add_admin_audit_arguments(reset)
+
+    admin_audit_command = subparsers.add_parser(
+        "admin-audit",
+        help="Read bounded append-only administrative account-audit history.",
+    )
+    admin_audit_command.add_argument(
+        "--username",
+        help="Optional existing account whose administrative events should be returned.",
+    )
+    admin_audit_command.add_argument(
+        "--limit",
+        type=int,
+        default=50,
+        help="Maximum newest events to return (1-200; default: 50).",
+    )
+    admin_audit_command.add_argument(
+        "--json",
+        action="store_true",
+        dest="json_output",
+        help="Emit machine-readable non-secret administrative audit history.",
     )
 
     audit = subparsers.add_parser(
@@ -412,6 +555,7 @@ def main() -> int:
                 username=args.username,
                 display_name=args.display_name,
                 password_stdin=args.password_stdin,
+                audit_context=_admin_audit_context(args),
             )
         elif args.command == "account-status":
             account_status(username=args.username, json_output=args.json_output)
@@ -420,17 +564,26 @@ def main() -> int:
                 username=args.username,
                 is_active=False,
                 confirm_disable=args.confirm_disable,
+                audit_context=_admin_audit_context(args),
             )
         elif args.command == "enable-user":
             set_account_active(
                 username=args.username,
                 is_active=True,
                 confirm_disable=False,
+                audit_context=_admin_audit_context(args),
             )
         elif args.command == "reset-password":
             reset_password(
                 username=args.username,
                 password_stdin=args.password_stdin,
+                audit_context=_admin_audit_context(args),
+            )
+        elif args.command == "admin-audit":
+            admin_audit(
+                username=args.username,
+                limit=args.limit,
+                json_output=args.json_output,
             )
         elif args.command == "audit-attachments":
             clean = audit_attachments(
