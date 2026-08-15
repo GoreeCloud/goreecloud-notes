@@ -35,6 +35,10 @@ class Settings(BaseSettings):
     revision_min_interval_seconds: int = Field(default=300, ge=30, le=86_400)
     attachment_root: str = Field(default="./data/attachments")
     attachment_max_bytes: int = Field(default=52_428_800, ge=1_048_576, le=1_073_741_824)
+    # Zero keeps the owner-level quota disabled for development/test. Production
+    # must select an explicit positive quota that can accommodate one permitted
+    # attachment so storage growth cannot remain unbounded by accident.
+    attachment_user_quota_bytes: int = Field(default=0, ge=0)
 
     login_rate_window_seconds: int = Field(default=300, ge=30, le=3_600)
     login_rate_account_failures: int = Field(default=5, ge=2, le=100)
@@ -126,6 +130,11 @@ class Settings(BaseSettings):
         attachment_root = Path(self.attachment_root).expanduser()
         if not attachment_root.is_absolute():
             failures.append("production attachment_root must be an absolute path")
+
+        if self.attachment_user_quota_bytes <= 0:
+            failures.append("production requires a positive attachment user quota")
+        elif self.attachment_user_quota_bytes < self.attachment_max_bytes:
+            failures.append("production attachment user quota must be at least attachment_max_bytes")
 
         if not self.database_password_file:
             failures.append("production requires database_password_file instead of an inline database password")
