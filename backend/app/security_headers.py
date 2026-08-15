@@ -28,9 +28,10 @@ class PrivateResponseHeadersMiddleware(BaseHTTPMiddleware):
     GoreeCloud Notes is a private knowledge application. API responses may contain
     note content, account state, search results, attachment metadata, or export data,
     so the API path is always treated as non-cacheable even when an individual route
-    forgets to set a cache policy. Frontend document CSP/HSTS remain publication-layer
-    responsibilities because the final static-serving and Caddy topology are separate
-    production gates.
+    forgets to set a cache policy. Existing route-level ``no-store`` contracts are
+    preserved rather than normalized to a different header value. Frontend document
+    CSP/HSTS remain publication-layer responsibilities because the final static-serving
+    and Caddy topology are separate production gates.
     """
 
     def __init__(self, app, *, api_prefix: str) -> None:  # type: ignore[no-untyped-def]
@@ -47,7 +48,15 @@ class PrivateResponseHeadersMiddleware(BaseHTTPMiddleware):
             response.headers[name] = value
 
         if self._is_api_path(request.url.path):
-            response.headers["Cache-Control"] = "private, no-store"
+            cache_control = response.headers.get("Cache-Control", "")
+            directives = {
+                directive.strip().casefold()
+                for directive in cache_control.split(",")
+                if directive.strip()
+            }
+            if "no-store" not in directives:
+                response.headers["Cache-Control"] = "private, no-store"
+
             response.headers["Pragma"] = "no-cache"
             response.headers["Expires"] = "0"
             response.headers["Content-Security-Policy"] = _API_CONTENT_SECURITY_POLICY
