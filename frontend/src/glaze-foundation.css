@@ -1,0 +1,91 @@
+:root {
+  --glaze-accent: #2f6fed;
+  --glaze-accent-strong: #174fb8;
+  --glaze-focus-ring: #2f6fed;
+  --glaze-control-radius: 14px;
+  --glaze-card-radius: 16px;
+  --glaze-panel-radius: 28px;
+  --glaze-touch-target: 44px;
+  --glaze-motion-fast: 140ms;
+  --glaze-motion-standard: 200ms;
+  --glaze-ease: cubic-bezier(0.2, 0, 0, 1);
+}
+
+/*
+ * Shared interaction primitives for the native Notes implementation of Glaze UI.
+ * These overrides intentionally leave product-specific surfaces in their existing
+ * component styles while centralizing accessibility-sensitive behavior that should
+ * remain consistent across the application.
+ */
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+a:focus-visible {
+  outline-color: var(--glaze-focus-ring);
+}
+
+.primary-button,
+.secondary-button,
+.account-security-launcher {
+  min-height: var(--glaze-touch-target);
+}
+
+.new-note,
+.quick-capture,
+.search-box,
+.note-card,
+.nav-item,
+.editor-actions button,
+.primary-button,
+.secondary-button,
+.account-security-launcher {
+  transition:
+    background-color var(--glaze-motion-fast) var(--glaze-ease),
+    border-color var(--glaze-motion-fast) var(--glaze-ease),
+    color var(--glaze-motion-fast) var(--glaze-ease),
+    box-shadow var(--glaze-motion-standard) var(--glaze-ease),
+    transform var(--glaze-motion-fast) var(--glaze-ease);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .note-card:hover {
+    transform: translateY(-1px);
+  }
+}
+
+@media (hover: none), (pointer: coarse) {
+  .note-card:hover {
+    transform: none;
+  }
+
+  .nav-item,
+  .editor-actions button,
+  .new-note,
+  .quick-capture {
+    min-height: var(--glaze-touch-target);
+  }
+}
+
+@media (max-width: 1040px) {
+  .nav-item {
+    height: var(--glaze-touch-target);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .new-note,
+  .quick-capture,
+  .search-box,
+  .note-card,
+  .nav-item,
+  .editor-actions button,
+  .primary-button,
+  .secondary-button,
+  .account-security-launcher {
+    transition: none;
+  }
+
+  .note-card:hover {
+    transform: none;
+  }
+}
