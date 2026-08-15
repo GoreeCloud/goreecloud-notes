@@ -18,6 +18,7 @@ def _settings(tmp_path: Path) -> Settings:
         allowed_origins="https://notes.goreecloud.com",
         trusted_proxy_cidrs="10.20.30.0/24",
         attachment_root=str(attachment_root),
+        attachment_user_quota_bytes=104_857_600,
         database_password_file=str(secret),
     )
 
@@ -27,6 +28,7 @@ def test_production_preflight_passes_only_static_runtime_boundary(tmp_path: Path
 
     assert report["status"] == "pass"
     assert all(report["checks"].values())
+    assert report["checks"]["attachmentUserQuotaConfigured"] is True
     assert report["nonDestructive"] is True
     assert report["liveDependencyValidationPerformed"] is False
     assert report["productionApprovalGranted"] is False
