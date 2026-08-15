@@ -61,6 +61,9 @@ def production_runtime_report(settings: Settings) -> dict[str, Any]:
         "trustedProxyCidrsConfigured": bool(settings.trusted_proxy_networks),
         "databaseSecretFileReady": _secret_file_ready(settings.database_password_file),
         "attachmentRootReady": _attachment_root_ready(settings.attachment_root),
+        "attachmentUserQuotaConfigured": settings.attachment_user_quota_bytes
+        >= settings.attachment_max_bytes
+        > 0,
     }
     passed = all(checks.values())
     return {
