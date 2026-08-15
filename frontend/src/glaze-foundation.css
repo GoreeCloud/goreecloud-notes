@@ -9,6 +9,10 @@
   --glaze-motion-fast: 140ms;
   --glaze-motion-standard: 200ms;
   --glaze-ease: cubic-bezier(0.2, 0, 0, 1);
+  --glaze-opaque-shell: #f8fafc;
+  --glaze-opaque-sidebar: #edf2f8;
+  --glaze-opaque-pane: #f6f8fb;
+  --glaze-opaque-surface: #ffffff;
 }
 
 /*
@@ -69,6 +73,88 @@ a:focus-visible {
 @media (max-width: 1040px) {
   .nav-item {
     height: var(--glaze-touch-target);
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --glaze-opaque-shell: #141b26;
+    --glaze-opaque-sidebar: #1a2330;
+    --glaze-opaque-pane: #161d28;
+    --glaze-opaque-surface: #263244;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .app-shell,
+  .sidebar,
+  .note-list-pane,
+  .editor-pane,
+  .new-note,
+  .quick-capture,
+  .search-box,
+  .note-card,
+  .callout,
+  .auth-card,
+  .auth-form input,
+  .empty-list {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+
+  .app-shell,
+  .auth-card {
+    background: var(--glaze-opaque-shell);
+  }
+
+  .sidebar {
+    background: var(--glaze-opaque-sidebar);
+  }
+
+  .note-list-pane,
+  .editor-pane {
+    background: var(--glaze-opaque-pane);
+  }
+
+  .new-note,
+  .quick-capture,
+  .search-box,
+  .note-card,
+  .callout,
+  .auth-form input,
+  .empty-list {
+    background: var(--glaze-opaque-surface);
+  }
+}
+
+@media (forced-colors: active) {
+  :root {
+    --glaze-focus-ring: Highlight;
+  }
+
+  .app-shell,
+  .sidebar,
+  .note-list-pane,
+  .editor-pane,
+  .new-note,
+  .quick-capture,
+  .search-box,
+  .note-card,
+  .callout,
+  .auth-card,
+  .auth-form input,
+  .empty-list {
+    background: Canvas;
+    border-color: CanvasText;
+    box-shadow: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  .nav-item.active,
+  .note-card.selected {
+    outline: 2px solid Highlight;
+    outline-offset: -2px;
   }
 }
 

@@ -39,6 +39,7 @@ from .login_security import (
 )
 from .portability_api import router as portability_router
 from .search import router as search_router
+from .security_headers import PrivateResponseHeadersMiddleware
 from .workspace import router as workspace_router
 
 settings = get_settings()
@@ -57,6 +58,7 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
     allow_headers=["Content-Type", "Authorization", "X-CSRF-Token"],
 )
+app.add_middleware(PrivateResponseHeadersMiddleware, api_prefix=settings.api_prefix)
 
 api = APIRouter(prefix=settings.api_prefix)
 
