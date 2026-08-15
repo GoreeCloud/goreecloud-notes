@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "npm run check:glaze && tsc -b && vite build",
     "lint": "oxlint src vite.config.ts",
     "check:glaze": "node scripts/validate-glaze-foundation.mjs",
     "preview": "vite preview"
