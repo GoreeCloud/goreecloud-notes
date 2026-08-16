@@ -14,6 +14,7 @@ from ..auth import normalize_username
 from ..config import get_settings
 from ..database import SessionLocal
 from ..models import User
+from .enex import DEFAULT_MAX_ENEX_BYTES, format_text_report as format_enex_text_report, inspect_enex_export
 from .evidence import DEFAULT_MAX_MANIFEST_BYTES, serialize_evidence, verify_attachment_binaries
 from .importer import (
     DEFAULT_MAX_INPUT_BYTES,
@@ -33,6 +34,16 @@ def _add_export_arguments(parser: argparse.ArgumentParser) -> None:
         type=int,
         default=DEFAULT_MAX_EXPORT_BYTES,
         help=f"Maximum JSON export size to inspect (default: {DEFAULT_MAX_EXPORT_BYTES} bytes).",
+    )
+
+
+def _add_enex_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("export", type=Path, help="Path to an Evernote ENEX export.")
+    parser.add_argument(
+        "--max-bytes",
+        type=int,
+        default=DEFAULT_MAX_ENEX_BYTES,
+        help=f"Maximum ENEX size to inspect (default: {DEFAULT_MAX_ENEX_BYTES} bytes).",
     )
 
 
@@ -64,6 +75,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
     _add_export_arguments(inspect)
     inspect.add_argument("--json", action="store_true", help="Emit a machine-readable inventory report.")
+
+    inspect_enex = subparsers.add_parser(
+        "inspect-enex-export",
+        help="Validate and inventory an Evernote ENEX export without extracting resources or importing data.",
+    )
+    _add_enex_arguments(inspect_enex)
+    inspect_enex.add_argument("--json", action="store_true", help="Emit a machine-readable ENEX inventory report.")
 
     manifest = subparsers.add_parser(
         "build-memos-manifest",
@@ -121,7 +139,7 @@ def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
 
-    if args.command in {"inspect-memos-export", "build-memos-manifest"} and args.max_bytes <= 0:
+    if args.command in {"inspect-memos-export", "build-memos-manifest", "inspect-enex-export"} and args.max_bytes <= 0:
         parser.error("--max-bytes must be positive.")
     if args.command == "verify-attachment-binaries" and args.max_manifest_bytes <= 0:
         parser.error("--max-manifest-bytes must be positive.")
@@ -137,6 +155,14 @@ def main() -> int:
                 print(json.dumps(report.to_dict(), indent=2, sort_keys=True))
             else:
                 print(format_text_report(report))
+            return 0 if report.metadata_valid else 3
+
+        if args.command == "inspect-enex-export":
+            report = inspect_enex_export(args.export, max_bytes=args.max_bytes)
+            if args.json:
+                print(json.dumps(report.to_dict(), indent=2, sort_keys=True))
+            else:
+                print(format_enex_text_report(report), end="")
             return 0 if report.metadata_valid else 3
 
         if args.command == "build-memos-manifest":
