@@ -80,6 +80,19 @@ export type NoteRevision = {
   change_summary: string | null;
 };
 
+export type LinkedNote = {
+  id: string;
+  title: string;
+  state: NoteState;
+  is_pinned: boolean;
+  updated_at: string;
+};
+
+export type NoteLinks = {
+  outgoing: LinkedNote[];
+  backlinks: LinkedNote[];
+};
+
 export type NoteListOptions = {
   state?: NoteState;
   notebookId?: string | null;
@@ -344,6 +357,10 @@ export async function updateNote(noteId: string, payload: NotePatch): Promise<No
       { csrf: true },
     ),
   );
+}
+
+export function listNoteLinks(noteId: string): Promise<NoteLinks> {
+  return apiFetch<NoteLinks>(`/notes/${encodeURIComponent(noteId)}/links`);
 }
 
 export async function listNoteRevisions(noteId: string): Promise<NoteRevision[]> {

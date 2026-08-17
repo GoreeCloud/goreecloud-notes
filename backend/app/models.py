@@ -16,6 +16,7 @@ from sqlalchemy import (
     Computed,
     DateTime,
     ForeignKey,
+    ForeignKeyConstraint,
     Index,
     Integer,
     String,
@@ -149,6 +150,9 @@ class Note(TimestampMixin, Base):
         ),
         CheckConstraint("document_schema > 0", name="ck_notes_document_schema_positive"),
         CheckConstraint("content_version > 0", name="ck_notes_content_version_positive"),
+        # The redundant owner/id unique key is intentional: derived relationship tables
+        # can enforce same-owner references at the database boundary, not only in API code.
+        UniqueConstraint("owner_id", "id", name="uq_notes_owner_id"),
         Index("ix_notes_owner_state_updated", "owner_id", "state", "updated_at"),
         Index("ix_notes_owner_notebook", "owner_id", "notebook_id"),
         Index("ix_notes_search_vector", "search_vector", postgresql_using="gin"),
@@ -179,6 +183,42 @@ class Note(TimestampMixin, Base):
         Boolean, nullable=False, default=False, server_default=text("false")
     )
     color: Mapped[str | None] = mapped_column(String(32), nullable=True)
+
+
+class NoteLink(Base):
+    """Owner-safe derived index for resolved internal note links.
+
+    The authoritative relationship remains the ``noteLink`` mark inside a note's
+    portable structured document. PostgreSQL trigger logic rebuilds this table on
+    note writes, so backlinks are fast without becoming a second mutable source
+    of truth. Composite foreign keys prevent cross-account relationships.
+    """
+
+    __tablename__ = "note_links"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["owner_id", "source_note_id"],
+            ["notes.owner_id", "notes.id"],
+            name="fk_note_links_source_owned_note",
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["owner_id", "target_note_id"],
+            ["notes.owner_id", "notes.id"],
+            name="fk_note_links_target_owned_note",
+            ondelete="CASCADE",
+        ),
+        CheckConstraint("source_note_id <> target_note_id", name="ck_note_links_not_self"),
+        Index("ix_note_links_owner_target", "owner_id", "target_note_id"),
+        Index("ix_note_links_owner_source", "owner_id", "source_note_id"),
+    )
+
+    owner_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    source_note_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    target_note_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
 
 
 class Tag(TimestampMixin, Base):

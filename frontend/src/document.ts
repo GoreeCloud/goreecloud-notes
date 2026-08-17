@@ -1,7 +1,8 @@
-export type GoreeMarkType = "bold" | "italic" | "strike" | "code";
+export type GoreeMarkType = "bold" | "italic" | "strike" | "code" | "noteLink";
 
 export type GoreeMark = {
   type: GoreeMarkType;
+  note_id?: string;
 };
 
 export type GoreeNodeType =
@@ -41,7 +42,7 @@ export type TiptapNode = {
   content?: TiptapNode[];
 };
 
-const supportedMarks = new Set<GoreeMarkType>(["bold", "italic", "strike", "code"]);
+const supportedMarks = new Set<GoreeMarkType>(["bold", "italic", "strike", "code", "noteLink"]);
 const supportedNodes = new Set<GoreeNodeType>([
   "paragraph",
   "heading",
@@ -79,15 +80,35 @@ function sanitizeMarks(marks: unknown): GoreeMark[] | undefined {
   }
 
   const clean: GoreeMark[] = [];
-  const seen = new Set<GoreeMarkType>();
+  const seen = new Set<string>();
   for (const mark of marks) {
     if (typeof mark !== "object" || mark === null || !("type" in mark)) {
       throw new DocumentContractError("Note text contains an invalid formatting mark.");
     }
-    const type = String(mark.type) as GoreeMarkType;
+    const raw = mark as Record<string, unknown>;
+    const type = String(raw.type) as GoreeMarkType;
     if (!supportedMarks.has(type)) {
       throw new DocumentContractError(`Unsupported GoreeCloud Notes text mark: ${type}`);
     }
+
+    if (type === "noteLink") {
+      const rawNoteId = typeof raw.note_id === "string"
+        ? raw.note_id
+        : typeof raw.attrs === "object" && raw.attrs !== null && typeof (raw.attrs as Record<string, unknown>).noteId === "string"
+          ? String((raw.attrs as Record<string, unknown>).noteId)
+          : "";
+      const noteId = rawNoteId.toLowerCase();
+      if (!uuidPattern.test(noteId)) {
+        throw new DocumentContractError("Internal note link contains an invalid note reference.");
+      }
+      const key = `${type}:${noteId}`;
+      if (!seen.has(key)) {
+        clean.push({ type, note_id: noteId });
+        seen.add(key);
+      }
+      continue;
+    }
+
     if (!seen.has(type)) {
       clean.push({ type });
       seen.add(type);
@@ -185,7 +206,10 @@ function goreeNodeToTiptap(node: GoreeNode): TiptapNode {
     return {
       type: "text",
       text: node.text ?? "",
-      marks: node.marks?.map((mark) => ({ type: mark.type })),
+      marks: node.marks?.map((mark) => ({
+        type: mark.type,
+        attrs: mark.type === "noteLink" ? { noteId: mark.note_id ?? "" } : undefined,
+      })),
     };
   }
 
@@ -227,10 +251,13 @@ function tiptapNodeToGoree(node: TiptapNode): GoreeNode {
   }
 
   if (type === "text") {
+    const rawMarks = node.marks?.map((mark) => mark.type === "noteLink"
+      ? { type: mark.type, note_id: typeof mark.attrs?.noteId === "string" ? mark.attrs.noteId : "" }
+      : { type: mark.type });
     return {
       type,
       text: typeof node.text === "string" ? node.text : "",
-      marks: sanitizeMarks(node.marks),
+      marks: sanitizeMarks(rawMarks),
     };
   }
 

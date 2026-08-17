@@ -37,6 +37,7 @@ from .login_security import (
     record_login_success,
     request_source,
 )
+from .note_links import router as note_links_router
 from .portability_api import router as portability_router
 from .search import router as search_router
 from .security_headers import PrivateResponseHeadersMiddleware
@@ -322,5 +323,6 @@ def logout(
 api.include_router(workspace_router)
 api.include_router(search_router)
 api.include_router(attachments_router)
+api.include_router(note_links_router)
 api.include_router(portability_router)
 app.include_router(api)

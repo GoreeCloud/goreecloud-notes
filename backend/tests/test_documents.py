@@ -9,6 +9,7 @@ from app.documents import (
     attachment_image_ids,
     canonicalize_document,
     empty_document,
+    note_link_ids,
 )
 
 
@@ -35,8 +36,9 @@ def test_legacy_paragraph_text_is_canonicalized() -> None:
     }
 
 
-def test_rich_document_and_attachment_image_are_canonicalized() -> None:
+def test_rich_document_attachment_and_note_link_are_canonicalized() -> None:
     attachment_id = uuid4()
+    linked_note_id = uuid4()
     document = {
         "format": "goreecloud.blocks",
         "version": 1,
@@ -45,7 +47,14 @@ def test_rich_document_and_attachment_image_are_canonicalized() -> None:
                 "type": "heading",
                 "level": 2,
                 "content": [
-                    {"type": "text", "text": "Title", "marks": [{"type": "bold"}]}
+                    {
+                        "type": "text",
+                        "text": "Title",
+                        "marks": [
+                            {"type": "bold"},
+                            {"type": "noteLink", "note_id": str(linked_note_id).upper()},
+                        ],
+                    }
                 ],
             },
             {
@@ -71,12 +80,17 @@ def test_rich_document_and_attachment_image_are_canonicalized() -> None:
     }
 
     clean = canonicalize_document(document)
+    assert clean["blocks"][0]["content"][0]["marks"] == [
+        {"type": "bold"},
+        {"type": "noteLink", "note_id": str(linked_note_id)},
+    ]
     assert clean["blocks"][1] == {
         "type": "attachmentImage",
         "attachment_id": str(attachment_id),
         "alt": "Architecture diagram",
     }
     assert attachment_image_ids(clean) == {attachment_id}
+    assert note_link_ids(clean) == {linked_note_id}
 
 
 @pytest.mark.parametrize(
@@ -121,6 +135,30 @@ def test_rich_document_and_attachment_image_are_canonicalized() -> None:
                 }
             ],
         },
+        {
+            "format": "goreecloud.blocks",
+            "version": 1,
+            "blocks": [
+                {
+                    "type": "paragraph",
+                    "content": [
+                        {"type": "text", "text": "x", "marks": [{"type": "noteLink", "note_id": "not-a-uuid"}]}
+                    ],
+                }
+            ],
+        },
+        {
+            "format": "goreecloud.blocks",
+            "version": 1,
+            "blocks": [
+                {
+                    "type": "paragraph",
+                    "content": [
+                        {"type": "text", "text": "x", "marks": [{"type": "noteLink", "note_id": str(uuid4()), "href": "https://example.invalid"}]}
+                    ],
+                }
+            ],
+        },
     ],
 )
 def test_invalid_documents_are_rejected(document: dict[str, object]) -> None:
@@ -147,3 +185,28 @@ def test_attachment_id_collector_is_fail_closed_and_tolerant() -> None:
 
     found = attachment_image_ids(document)
     assert found == {UUID(str(first)), UUID(str(second))}
+
+
+def test_note_link_id_collector_tolerates_unresolved_and_invalid_surroundings() -> None:
+    first = uuid4()
+    second = uuid4()
+    document = {
+        "format": "future-or-partially-invalid",
+        "blocks": [
+            {
+                "type": "paragraph",
+                "content": [
+                    {"type": "text", "text": "one", "marks": [{"type": "noteLink", "note_id": str(first)}]},
+                    {"type": "text", "text": "bad", "marks": [{"type": "noteLink", "note_id": "invalid"}]},
+                ],
+            },
+            {
+                "type": "unknown",
+                "content": [
+                    {"type": "text", "text": "two", "marks": [{"type": "noteLink", "note_id": str(second)}]},
+                ],
+            },
+        ],
+    }
+
+    assert note_link_ids(document) == {UUID(str(first)), UUID(str(second))}

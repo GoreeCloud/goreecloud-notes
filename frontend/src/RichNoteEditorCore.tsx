@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Node } from "@tiptap/core";
+import { Mark, Node } from "@tiptap/core";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 
@@ -7,7 +7,12 @@ import {
   attachmentPreviewUrl,
   isAttachmentPreviewable,
   listAttachments,
+  listNoteLinks,
+  listNotes,
   type Attachment,
+  type LinkedNote,
+  type Note,
+  type NoteLinks,
 } from "./api";
 import {
   goreeToTiptap,
@@ -16,6 +21,7 @@ import {
   type TiptapNode,
 } from "./document";
 import { NOTE_TEMPLATES, noteTemplateById } from "./noteTemplates";
+import "./note-links.css";
 
 const AttachmentImage = Node.create({
   name: "attachmentImage",
@@ -60,6 +66,37 @@ const AttachmentImage = Node.create({
   },
 });
 
+const InternalNoteLink = Mark.create({
+  name: "noteLink",
+  inclusive: false,
+
+  addAttributes() {
+    return {
+      noteId: {
+        default: "",
+        parseHTML: (element) => element.getAttribute("data-note-id") ?? "",
+      },
+    };
+  },
+
+  parseHTML() {
+    return [{ tag: "span[data-goree-note-link]" }];
+  },
+
+  renderHTML({ HTMLAttributes }) {
+    const noteId = typeof HTMLAttributes.noteId === "string" ? HTMLAttributes.noteId : "";
+    return [
+      "span",
+      {
+        "data-goree-note-link": "true",
+        "data-note-id": noteId,
+        class: "goree-note-link",
+      },
+      0,
+    ];
+  },
+});
+
 type RichNoteEditorProps = {
   noteId: string;
   value: NoteDocument;
@@ -73,6 +110,8 @@ type ToolbarButtonProps = {
   disabled?: boolean;
   onClick: () => void;
 };
+
+const EMPTY_LINKS: NoteLinks = { outgoing: [], backlinks: [] };
 
 function ToolbarButton({ label, active = false, disabled = false, onClick }: ToolbarButtonProps) {
   return (
@@ -88,12 +127,22 @@ function ToolbarButton({ label, active = false, disabled = false, onClick }: Too
   );
 }
 
+function noteLabel(note: Pick<Note | LinkedNote, "title" | "state">): string {
+  const title = note.title.trim() || "Untitled";
+  return note.state === "normal" ? title : `${title} · ${note.state}`;
+}
+
 export function RichNoteEditor({ noteId, value, disabled = false, onChange }: RichNoteEditorProps) {
   const [imageAttachments, setImageAttachments] = useState<Attachment[]>([]);
   const [selectedImageId, setSelectedImageId] = useState("");
   const [attachmentStatus, setAttachmentStatus] = useState("");
   const [selectedTemplateId, setSelectedTemplateId] = useState(NOTE_TEMPLATES[0]?.id ?? "");
   const [templateStatus, setTemplateStatus] = useState("");
+  const [linkCandidates, setLinkCandidates] = useState<Note[]>([]);
+  const [selectedLinkId, setSelectedLinkId] = useState("");
+  const [relationships, setRelationships] = useState<NoteLinks>(EMPTY_LINKS);
+  const [linkStatus, setLinkStatus] = useState("");
+  const [linksLoading, setLinksLoading] = useState(false);
 
   const editor = useEditor({
     extensions: [
@@ -101,6 +150,7 @@ export function RichNoteEditor({ noteId, value, disabled = false, onChange }: Ri
         heading: { levels: [1, 2, 3] },
       }),
       AttachmentImage,
+      InternalNoteLink,
     ],
     content: goreeToTiptap(value),
     immediatelyRender: false,
@@ -130,22 +180,63 @@ export function RichNoteEditor({ noteId, value, disabled = false, onChange }: Ri
     }
   }
 
+  async function refreshRelationships() {
+    setLinksLoading(true);
+    try {
+      const [normalNotes, archivedNotes, nextRelationships] = await Promise.all([
+        listNotes({ state: "normal" }),
+        listNotes({ state: "archived" }),
+        listNoteLinks(noteId),
+      ]);
+      const candidates = [...normalNotes, ...archivedNotes]
+        .filter((note) => note.id !== noteId)
+        .sort((left, right) => (left.title || "Untitled").localeCompare(right.title || "Untitled"));
+      setLinkCandidates(candidates);
+      setSelectedLinkId((current) => candidates.some((item) => item.id === current) ? current : "");
+      setRelationships(nextRelationships);
+      setLinkStatus("");
+    } catch (error) {
+      setLinkCandidates([]);
+      setSelectedLinkId("");
+      setRelationships(EMPTY_LINKS);
+      setLinkStatus(error instanceof Error ? error.message : "Unable to refresh note relationships.");
+    } finally {
+      setLinksLoading(false);
+    }
+  }
+
   useEffect(() => {
     let cancelled = false;
     setTemplateStatus("");
-    void listAttachments(noteId)
-      .then((attachments) => {
+    setLinkStatus("");
+    void Promise.all([
+      listAttachments(noteId),
+      listNotes({ state: "normal" }),
+      listNotes({ state: "archived" }),
+      listNoteLinks(noteId),
+    ])
+      .then(([attachments, normalNotes, archivedNotes, nextRelationships]) => {
         if (cancelled) return;
         const images = attachments.filter(isAttachmentPreviewable);
+        const candidates = [...normalNotes, ...archivedNotes]
+          .filter((note) => note.id !== noteId)
+          .sort((left, right) => (left.title || "Untitled").localeCompare(right.title || "Untitled"));
         setImageAttachments(images);
         setSelectedImageId("");
         setAttachmentStatus("");
+        setLinkCandidates(candidates);
+        setSelectedLinkId("");
+        setRelationships(nextRelationships);
       })
       .catch((error: unknown) => {
         if (cancelled) return;
         setImageAttachments([]);
         setSelectedImageId("");
-        setAttachmentStatus(error instanceof Error ? error.message : "Unable to load image attachments.");
+        setAttachmentStatus("");
+        setLinkCandidates([]);
+        setSelectedLinkId("");
+        setRelationships(EMPTY_LINKS);
+        setLinkStatus(error instanceof Error ? error.message : "Unable to load note relationships.");
       });
     return () => {
       cancelled = true;
@@ -177,6 +268,8 @@ export function RichNoteEditor({ noteId, value, disabled = false, onChange }: Ri
 
   const selectedImage = imageAttachments.find((attachment) => attachment.id === selectedImageId) ?? null;
   const selectedTemplate = noteTemplateById(selectedTemplateId);
+  const selectedLink = linkCandidates.find((note) => note.id === selectedLinkId) ?? null;
+  const linkEditingBlocked = disabled || editor.isActive("codeBlock");
 
   function insertSelectedImage() {
     if (!selectedImage || disabled || !editor) return;
@@ -217,6 +310,34 @@ export function RichNoteEditor({ noteId, value, disabled = false, onChange }: Ri
         ? `Inserted ${selectedTemplate.label}.`
         : `Could not insert ${selectedTemplate.label}.`,
     );
+  }
+
+  function insertSelectedNoteLink() {
+    if (!selectedLink || linkEditingBlocked || !editor) return;
+
+    const noteIdToInsert = selectedLink.id;
+    const titleToInsert = selectedLink.title.trim() || "Untitled";
+    const { empty } = editor.state.selection;
+    const chain = editor.chain().focus();
+    const inserted = empty
+      ? chain.insertContent({
+        type: "text",
+        text: titleToInsert,
+        marks: [{ type: "noteLink", attrs: { noteId: noteIdToInsert } }],
+      }).run()
+      : chain.setMark("noteLink", { noteId: noteIdToInsert }).run();
+
+    setLinkStatus(
+      inserted
+        ? `Linked to ${titleToInsert}. Save this note, then refresh relationships to update backlinks.`
+        : `Could not link to ${titleToInsert}.`,
+    );
+  }
+
+  function removeNoteLink() {
+    if (linkEditingBlocked || !editor) return;
+    const removed = editor.chain().focus().unsetMark("noteLink").run();
+    setLinkStatus(removed ? "Removed the internal link mark from the current selection." : "No internal link was removed.");
   }
 
   return (
@@ -289,6 +410,34 @@ export function RichNoteEditor({ noteId, value, disabled = false, onChange }: Ri
         <span className="rich-toolbar-separator" aria-hidden="true" />
         <select
           className="rich-toolbar-select"
+          aria-label="Internal note link target"
+          value={selectedLinkId}
+          disabled={linkEditingBlocked || linkCandidates.length === 0}
+          onFocus={() => void refreshRelationships()}
+          onChange={(event) => {
+            setSelectedLinkId(event.target.value);
+            setLinkStatus("");
+          }}
+        >
+          <option value="">{linkCandidates.length === 0 ? "No linkable notes" : "Choose note to link"}</option>
+          {linkCandidates.map((note) => (
+            <option value={note.id} key={note.id}>{noteLabel(note)}</option>
+          ))}
+        </select>
+        <ToolbarButton
+          label="Link note"
+          active={editor.isActive("noteLink")}
+          disabled={linkEditingBlocked || selectedLink === null}
+          onClick={insertSelectedNoteLink}
+        />
+        <ToolbarButton
+          label="Unlink"
+          disabled={linkEditingBlocked || !editor.isActive("noteLink")}
+          onClick={removeNoteLink}
+        />
+        <span className="rich-toolbar-separator" aria-hidden="true" />
+        <select
+          className="rich-toolbar-select"
           aria-label="Note template"
           value={selectedTemplateId}
           disabled={disabled || NOTE_TEMPLATES.length === 0}
@@ -343,6 +492,34 @@ export function RichNoteEditor({ noteId, value, disabled = false, onChange }: Ri
         </div>
       ) : null}
       {attachmentStatus ? <div className="rich-toolbar-status" role="status">{attachmentStatus}</div> : null}
+      {linkStatus ? <div className="rich-toolbar-status" role="status">{linkStatus}</div> : null}
+      <section className="note-links-panel" aria-labelledby="note-links-heading">
+        <div className="note-links-heading">
+          <div>
+            <strong id="note-links-heading">Connected notes</strong>
+            <span>Private internal links and backlinks</span>
+          </div>
+          <button type="button" onClick={() => void refreshRelationships()} disabled={linksLoading}>
+            {linksLoading ? "Refreshing…" : "Refresh"}
+          </button>
+        </div>
+        <div className="note-links-grid">
+          <div>
+            <span className="note-links-label">Links from this note</span>
+            <div className="note-link-chip-list">
+              {relationships.outgoing.map((note) => <span className="note-link-chip" key={note.id}>{noteLabel(note)}</span>)}
+              {relationships.outgoing.length === 0 ? <span className="note-links-empty">No resolved outgoing links yet.</span> : null}
+            </div>
+          </div>
+          <div>
+            <span className="note-links-label">Links to this note</span>
+            <div className="note-link-chip-list">
+              {relationships.backlinks.map((note) => <span className="note-link-chip" key={note.id}>{noteLabel(note)}</span>)}
+              {relationships.backlinks.length === 0 ? <span className="note-links-empty">No backlinks yet.</span> : null}
+            </div>
+          </div>
+        </div>
+      </section>
       <EditorContent editor={editor} />
     </div>
   );

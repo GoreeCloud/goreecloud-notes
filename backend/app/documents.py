@@ -22,7 +22,7 @@ SAFE_INLINE_IMAGE_MEDIA_TYPES = frozenset(
     }
 )
 
-SUPPORTED_MARKS = frozenset({"bold", "italic", "strike", "code"})
+SUPPORTED_MARKS = frozenset({"bold", "italic", "strike", "code", "noteLink"})
 ROOT_BLOCK_TYPES = frozenset(
     {
         "paragraph",
@@ -93,16 +93,33 @@ def _canonical_marks(value: object, *, budget: _Budget) -> list[dict[str, str]]:
 
     marks = _sequence(value, label="text marks")
     result: list[dict[str, str]] = []
-    seen: set[str] = set()
+    seen: set[tuple[str, str | None]] = set()
     for raw_mark in marks:
         mark = _mapping(raw_mark, label="mark")
-        _reject_unknown_keys(mark, {"type"}, label="mark")
         mark_type = mark.get("type")
         if not isinstance(mark_type, str) or mark_type not in SUPPORTED_MARKS:
             raise DocumentValidationError("document contains an unsupported text mark")
-        if mark_type not in seen:
+
+        if mark_type == "noteLink":
+            _reject_unknown_keys(mark, {"type", "note_id"}, label="note link mark")
+            raw_note_id = mark.get("note_id")
+            if not isinstance(raw_note_id, str):
+                raise DocumentValidationError("note link mark requires a note_id")
+            try:
+                note_id = str(UUID(raw_note_id))
+            except ValueError as exc:
+                raise DocumentValidationError("note link mark contains an invalid note_id") from exc
+            key = (mark_type, note_id)
+            if key not in seen:
+                result.append({"type": mark_type, "note_id": note_id})
+                seen.add(key)
+            continue
+
+        _reject_unknown_keys(mark, {"type"}, label="mark")
+        key = (mark_type, None)
+        if key not in seen:
             result.append({"type": mark_type})
-            seen.add(mark_type)
+            seen.add(key)
     return result
 
 
@@ -304,6 +321,36 @@ def attachment_image_ids(value: object) -> set[UUID]:
         if isinstance(item, Mapping):
             if item.get("type") == "attachmentImage":
                 raw_id = item.get("attachment_id")
+                if isinstance(raw_id, str):
+                    try:
+                        found.add(UUID(raw_id))
+                    except ValueError:
+                        pass
+            for child in item.values():
+                walk(child)
+        elif isinstance(item, Sequence) and not isinstance(item, (str, bytes, bytearray)):
+            for child in item:
+                walk(child)
+
+    walk(value)
+    return found
+
+
+def note_link_ids(value: object) -> set[UUID]:
+    """Collect syntactically valid internal-note references from any document-shaped value.
+
+    Link targets are intentionally allowed to be unresolved in the document contract. The
+    persistence index resolves only notes owned by the same account, so exports can preserve a
+    reference even when its target is absent while cross-account note identifiers never resolve
+    into visible relationship data.
+    """
+
+    found: set[UUID] = set()
+
+    def walk(item: object) -> None:
+        if isinstance(item, Mapping):
+            if item.get("type") == "noteLink":
+                raw_id = item.get("note_id")
                 if isinstance(raw_id, str):
                     try:
                         found.add(UUID(raw_id))
