@@ -14,6 +14,25 @@
   text-decoration: none;
 }
 
+.goree-note-link.note-link-open {
+  cursor: pointer;
+}
+
+.goree-note-link.note-link-open:hover:not([aria-disabled="true"]) {
+  color: var(--glaze-accent);
+  background: color-mix(in srgb, var(--glaze-accent) 18%, transparent);
+}
+
+.goree-note-link.note-link-open:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--glaze-accent) 58%, transparent);
+  outline-offset: 2px;
+}
+
+.goree-note-link.note-link-open[aria-disabled="true"] {
+  cursor: not-allowed;
+  opacity: 0.56;
+}
+
 .note-links-panel {
   display: grid;
   gap: 12px;
@@ -167,6 +186,10 @@ button.note-link-chip:disabled {
   .note-links-heading button {
     min-height: var(--glaze-target-comfortable);
   }
+
+  .goree-note-link.note-link-open {
+    padding-block: 0.12em;
+  }
 }
 
 @media (prefers-reduced-transparency: reduce) {
@@ -174,6 +197,11 @@ button.note-link-chip:disabled {
   .note-links-grid > div {
     background: var(--glaze-surface-muted);
     backdrop-filter: none;
+  }
+
+  .goree-note-link,
+  .goree-note-link.note-link-open:hover:not([aria-disabled="true"]) {
+    background: var(--glaze-surface-muted);
   }
 }
 
@@ -189,6 +217,7 @@ button.note-link-chip:disabled {
     forced-color-adjust: auto;
   }
 
+  .goree-note-link.note-link-open:focus-visible,
   button.note-link-chip:focus-visible {
     outline-color: Highlight;
   }

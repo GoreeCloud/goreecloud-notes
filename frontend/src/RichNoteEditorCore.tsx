@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Mark, Node } from "@tiptap/core";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
@@ -22,6 +22,8 @@ import {
 } from "./document";
 import { NOTE_TEMPLATES, noteTemplateById } from "./noteTemplates";
 import "./note-links.css";
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 const AttachmentImage = Node.create({
   name: "attachmentImage",
@@ -90,7 +92,10 @@ const InternalNoteLink = Mark.create({
       {
         "data-goree-note-link": "true",
         "data-note-id": noteId,
-        class: "goree-note-link",
+        class: "goree-note-link note-link-open",
+        role: "link",
+        tabindex: "0",
+        title: "Open linked note",
       },
       0,
     ];
@@ -166,6 +171,38 @@ export function RichNoteEditor({ noteId, value, disabled = false, navigationDisa
   const [relationships, setRelationships] = useState<NoteLinks>(EMPTY_LINKS);
   const [linkStatus, setLinkStatus] = useState("");
   const [linksLoading, setLinksLoading] = useState(false);
+  const onOpenNoteRef = useRef(onOpenNote);
+  const navigationDisabledRef = useRef(navigationDisabled);
+  const currentNoteIdRef = useRef(noteId);
+
+  useEffect(() => {
+    onOpenNoteRef.current = onOpenNote;
+  }, [onOpenNote]);
+
+  useEffect(() => {
+    navigationDisabledRef.current = navigationDisabled;
+  }, [navigationDisabled]);
+
+  useEffect(() => {
+    currentNoteIdRef.current = noteId;
+  }, [noteId]);
+
+  function openInlineNoteLink(element: HTMLElement): boolean {
+    if (navigationDisabledRef.current) {
+      setLinkStatus("Linked-note navigation is temporarily unavailable while another operation is running.");
+      return true;
+    }
+
+    const targetNoteId = element.dataset.noteId?.trim().toLowerCase() ?? "";
+    if (!UUID_PATTERN.test(targetNoteId) || targetNoteId === currentNoteIdRef.current.toLowerCase()) {
+      setLinkStatus("This internal note link target is unavailable.");
+      return true;
+    }
+
+    setLinkStatus("");
+    onOpenNoteRef.current(targetNoteId);
+    return true;
+  }
 
   const editor = useEditor({
     extensions: [
@@ -183,6 +220,27 @@ export function RichNoteEditor({ noteId, value, disabled = false, navigationDisa
         class: "rich-editor-content",
         spellcheck: "true",
         "aria-label": "Note body",
+      },
+      handleClick: (_view, _position, event) => {
+        if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+          return false;
+        }
+        const element = event.target instanceof Element
+          ? event.target.closest<HTMLElement>(".goree-note-link.note-link-open[data-note-id]")
+          : null;
+        return element ? openInlineNoteLink(element) : false;
+      },
+      handleKeyDown: (_view, event) => {
+        if (event.key !== "Enter" || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+          return false;
+        }
+        const element = event.target instanceof Element
+          ? event.target.closest<HTMLElement>(".goree-note-link.note-link-open[data-note-id]")
+          : null;
+        if (!element) return false;
+        event.preventDefault();
+        element.click();
+        return true;
       },
     },
     onUpdate: ({ editor: activeEditor }) => {
@@ -272,6 +330,17 @@ export function RichNoteEditor({ noteId, value, disabled = false, navigationDisa
     }
     editor.setEditable(!disabled);
   }, [disabled, editor]);
+
+  useEffect(() => {
+    if (!editor) {
+      return;
+    }
+    const inlineLinks = editor.view.dom.querySelectorAll<HTMLElement>(".goree-note-link.note-link-open");
+    inlineLinks.forEach((element) => {
+      if (navigationDisabled) element.setAttribute("aria-disabled", "true");
+      else element.removeAttribute("aria-disabled");
+    });
+  }, [editor, navigationDisabled, noteId, value]);
 
   useEffect(() => {
     if (!editor) {

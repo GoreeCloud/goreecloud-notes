@@ -110,7 +110,7 @@ export function WorkspaceNavigationGuard() {
       if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
 
       const target = navigationTargetFromEvent(event);
-      if (!target || target.matches(":disabled")) return;
+      if (!target || target.matches(":disabled") || target.getAttribute("aria-disabled") === "true") return;
 
       if (bypassTarget.current === target) {
         bypassTarget.current = null;

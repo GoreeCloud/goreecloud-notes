@@ -75,19 +75,32 @@ This avoids a second note-loading or persistence model. The relationship panel d
 
 Every Connected-note navigation button uses the `note-link-open` guard hook. If the current note is dirty, still saving, failed to save, or in optimistic-concurrency conflict, `WorkspaceNavigationGuard` intercepts the button before the App navigation callback runs. Save & continue reuses the existing Save action; Discard & continue is the only intentional local-draft-loss path; conflicts remain fail-closed.
 
-Inline `noteLink` marks inside the editable document remain document semantics rather than separate browser anchors in this checkpoint. Direct click-to-open behavior for the inline mark itself can be evaluated separately without changing the portable relationship contract.
+## Inline note-link navigation
+
+The same portable `noteLink` mark now exposes a local navigation affordance inside the editable note body. It remains a `span` carrying only `data-note-id`; it does not become an `href`, route string, external URL, or browser location change.
+
+A primary unmodified pointer click on the inline mark opens the linked note through the same App-owned `onOpenNote` callback used by the Connected notes panel. Modified pointer clicks remain available to normal editor/browser selection behavior instead of introducing a second navigation mode.
+
+The inline mark also exposes `role="link"`, keyboard focus, and Enter activation. Enter synthesizes the same local click event rather than calling the App directly, which means dirty, saving, failed-save, and conflict states still pass through `WorkspaceNavigationGuard` before navigation can occur.
+
+Before invoking the App, the editor verifies that the mark contains a canonical UUID supported by the current document contract and refuses self-navigation. Malformed or self-referential inline targets fail closed with a local status message. The server remains authoritative: the App subsequently resolves the target through the authenticated owner-scoped note API before opening it.
+
+During unrelated busy operations the inline link receives `aria-disabled="true"`, the editor refuses navigation, and the root navigation guard ignores the disabled affordance. A save already in progress remains eligible for guard interception so Save & continue can wait for the existing persistence operation to resolve.
+
+This behavior changes only the browser interaction surface. The stored `goreecloud.blocks` document, PostgreSQL `note_links` index, owner-isolation model, export format, re-import semantics, and backend API remain unchanged.
 
 ## Glaze UI and accessibility
 
-The relationship panel uses GoreeCloud Glaze semantic variables for text, muted text, lines, accent treatment, and surfaces. It includes:
+The relationship panel and inline note-link affordance use GoreeCloud Glaze semantic variables for text, muted text, lines, accent treatment, and surfaces. They include:
 
-- visible keyboard focus;
+- visible keyboard focus for Connected-note buttons and inline links;
 - Glaze minimum pointer targets for Connected-note buttons;
-- comfortable targets on coarse-pointer devices;
+- comfortable Connected-note targets and additional inline padding on coarse-pointer devices;
 - compact and single-column responsive layouts;
 - forced-colors behavior;
-- reduced-transparency fallback; and
-- status messages for link insertion and relationship refresh outcomes.
+- reduced-transparency fallback;
+- explicit disabled-state treatment for temporarily unavailable inline navigation; and
+- status messages for link insertion, invalid inline targets, navigation availability, and relationship refresh outcomes.
 
 ## Validation
 
@@ -98,9 +111,9 @@ The implementation is gated by:
 3. live Compose validation proving same-owner outgoing links and backlinks;
 4. live cross-account opacity validation;
 5. live proof that another account's UUID cannot become a resolved relationship row;
-6. frontend lint, TypeScript build, Glaze foundation validation, bundle-budget validation, and the navigation-guard source contract verifying both outgoing and backlink navigation; and
+6. frontend lint, TypeScript build, Glaze foundation validation, bundle-budget validation, and the navigation-guard source contract verifying outgoing/backlink navigation plus inline pointer/keyboard activation, UUID/self validation, `aria-disabled` handling, and guarded replay; and
 7. existing native export/re-import and backup/restore gates, which continue to exercise the authoritative document and PostgreSQL database respectively.
 
 ## Deliberate boundaries
 
-This checkpoint does not add public URLs, remote sharing, web-link previews, cross-account linking, automatic title mutation, direct inline-mark browser navigation, or permanent-deletion semantics. Those features require separate privacy, security, migration, and usability decisions.
+This checkpoint does not add public URLs, remote sharing, web-link previews, cross-account linking, automatic title mutation, generic external-link browser routing, or permanent-deletion semantics. Those features require separate privacy, security, migration, and usability decisions.
