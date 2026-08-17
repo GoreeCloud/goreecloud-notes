@@ -3,12 +3,18 @@ import { createRoot } from "react-dom/client";
 
 import AccountSecurityPage from "./AccountSecurityPage";
 import App from "./App";
+import { AppearanceControl } from "./AppearanceControl";
+import { initializeAppearancePreference } from "./appearance";
+import "./glaze/glaze.css";
+import "./glaze/glaze.accessibility.css";
 import "./styles.css";
 import "./organization.css";
 import "./rich-editor.css";
 import "./attachments.css";
 import "./account-security.css";
 import "./glaze-foundation.css";
+
+initializeAppearancePreference();
 
 function Root() {
   const [hash, setHash] = useState(window.location.hash);
@@ -22,23 +28,26 @@ function Root() {
     return () => window.removeEventListener("hashchange", handleHashChange);
   }, []);
 
-  if (hash === "#account-security") {
-    return <AccountSecurityPage />;
-  }
+  const accountSecurityOpen = hash === "#account-security";
 
   return (
-    <>
-      <App />
-      <a
-        className="account-security-launcher"
-        href="#account-security"
-        target="_blank"
-        rel="noopener"
-        title="Open Account & Security in a new tab so the current Notes draft remains open"
-      >
-        Account &amp; Security
-      </a>
-    </>
+    <div className="notes-root glaze-canvas">
+      {accountSecurityOpen ? <AccountSecurityPage /> : <App />}
+      <aside className="glaze-utility-dock glaze-overlay" aria-label="Application controls">
+        <AppearanceControl />
+        {!accountSecurityOpen ? (
+          <a
+            className="account-security-launcher glaze-button"
+            href="#account-security"
+            target="_blank"
+            rel="noopener"
+            title="Open Account & Security in a new tab so the current Notes draft remains open"
+          >
+            Account &amp; Security
+          </a>
+        ) : null}
+      </aside>
+    </div>
   );
 }
 
