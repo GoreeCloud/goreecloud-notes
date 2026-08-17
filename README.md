@@ -6,27 +6,27 @@ GoreeCloud Notes is a privacy-first, self-hosted note-taking, knowledge-manageme
 
 **Milestone 0 — Native Foundation is in active development. Production deployment is not approved.**
 
-The current development line is draft PR #1 on `feature/native-foundation`. The native application already provides a substantial source-validated foundation, but GoreeCloud production cutover remains gated by protected-source migration rehearsal, target storage and recovery evidence, final private-publication controls, monitoring, operator procedures, and real-device acceptance.
+The active development line is draft PR #1 on `feature/native-foundation`. Source-level validation is substantial, but production cutover remains gated by protected-source migration rehearsal, target storage and recovery evidence, final private-publication controls, monitoring, operator procedures, and real-device acceptance.
 
-The existing Memos-based Notes environment remains protected as a migration source until those gates are closed. `GoreeCloud/memos` is a separate GoreeCloud quick-capture product and is not replaced or retired by native Notes development.
+GoreeCloud Memos remains a separate lightweight quick-capture product and is not replaced or retired by native Notes development.
 
-## Product Direction
+## Product direction
 
-GoreeCloud Notes combines fast capture with an Evernote-class knowledge workspace. The native product direction includes:
+GoreeCloud Notes is designed as a private Evernote-class knowledge workspace with:
 
-- Quick Notes and low-friction capture.
-- Notebooks and nested notebooks.
-- Tags, pinning, favorites/shortcuts where approved, Archive, and recoverable Trash.
-- Rich structured editing with Markdown interoperability.
-- Private attachments and inline images.
-- Full-text search and filtering.
-- Revision history and recovery.
-- Portable full-library export and controlled import/migration tooling.
-- Owner-scoped internal note links/backlinks and private templates, with richer knowledge organization in later milestones.
-- Firefox-first browser capture in a later milestone.
-- Offline synchronization and mobile clients only after the server and synchronization contracts are mature.
+- low-friction note capture;
+- notebooks and nested notebooks;
+- tags, pinning, Archive, and recoverable Trash;
+- structured rich editing with Markdown interoperability;
+- private attachments and inline images;
+- full-text search and filtering;
+- immutable revisions and conflict-safe recovery;
+- portable full-library export and controlled migration/import tooling;
+- owner-scoped internal links/backlinks and private templates;
+- Firefox-first browser capture in a later milestone; and
+- offline/mobile clients only after server and synchronization contracts mature.
 
-## Native Architecture
+## Architecture
 
 ```text
 Browser / future clients
@@ -43,118 +43,118 @@ FastAPI / Python
         +---- GoreeCloud-managed attachment storage
 ```
 
-Current technology direction:
+Current foundation:
 
-- Frontend: React + TypeScript + Vite.
-- Design system: canonical GoreeCloud Glaze UI 1.0.0 with a locally vendored, revision-pinned web foundation.
-- Rich editor: Tiptap/ProseMirror behind an application-owned `goreecloud.blocks` document contract.
-- Backend: Python + FastAPI.
-- Database: PostgreSQL with SQLAlchemy and Alembic migrations through `0008_note_links`.
-- Search: PostgreSQL generated `tsvector` plus GIN index initially.
-- API: versioned private HTTP APIs designed for browser, extension, and future mobile clients.
-- Deployment: Docker and Docker Compose for development/integration validation; production placement is not approved.
-- License: GNU Affero General Public License v3.0 only (`AGPL-3.0-only`).
+- **Frontend:** React, TypeScript, Vite, Tiptap/ProseMirror, canonical Glaze UI 1.0.
+- **Document contract:** application-owned `goreecloud.blocks` v1.
+- **Backend:** Python + FastAPI.
+- **Database:** PostgreSQL with SQLAlchemy and Alembic through `0008_note_links`.
+- **Search:** PostgreSQL generated `tsvector` plus GIN indexing.
+- **Deployment validation:** Docker and Docker Compose; production placement is not approved.
+- **License:** GNU Affero General Public License v3.0 only (`AGPL-3.0-only`).
+
+## Current source-validated foundation
+
+The native branch includes:
+
+- private authentication, opaque sessions, CSRF protection, bounded login-abuse controls, password recovery/rotation, session review, and account suspension/reinstatement;
+- append-only privileged-account audit records with production operator/reason requirements;
+- owner-scoped notes, notebooks, nested notebooks, tags, pinning, Archive, recoverable Trash, and organization management;
+- structured rich editing, optimistic concurrency, immutable revisions, and conflict-safe restore;
+- owner-scoped internal note links/backlinks with the portable note document as source of truth and a derived same-owner PostgreSQL lookup index;
+- built-in private note templates;
+- indexed owner-isolated PostgreSQL full-text search;
+- private attachment storage, safe raster previews, attachment-ID inline images, owner quotas, reference-aware deletion protection, and non-destructive attachment integrity auditing;
+- authenticated browser and administrator CLI full-library native export;
+- explicit empty-target native re-import with staged attachment hashing and relationship validation;
+- destructive disposable native export/re-import/re-export equivalence coverage;
+- controlled Memos inspection, migration manifest/evidence, isolated empty-target import, post-import verification, and provenance preservation;
+- Evernote ENEX read-only inspection, controlled resource extraction, exact-preservation provider-neutral normalization, and deterministic **zero-write ENML → `goreecloud.blocks` conversion review**;
+- locked frontend/backend dependencies and fail-closed production configuration;
+- separate liveness (`/health`) and dependency readiness (`/ready`);
+- centralized private API response hardening;
+- destructive disposable PostgreSQL-plus-attachment backup/restore validation; and
+- dedicated Continuous Integration and Production Runtime Preflight workflows.
+
+## Evernote migration boundary
+
+The ENEX migration path is deliberately staged:
+
+1. read-only source inspection;
+2. controlled resource extraction and binary evidence;
+3. exact original UTF-8 ENML preservation in a deterministic provider-neutral normalization artifact;
+4. deterministic zero-write conversion into `goreecloud.blocks` candidate documents with explicit review/blocking evidence.
+
+Stage 4 does **not** import data. It preserves unsupported semantics as review evidence instead of silently discarding them. Tables currently block a candidate note because the native v1 document contract has no table node. Generic link targets, styling, Evernote checkboxes/encryption, non-image media placement, and resources not referenced by ENML are explicitly marked for review. Verified safe raster media may receive deterministic future attachment IDs for candidate `attachmentImage` blocks, but no native attachment is created.
+
+Remaining ENEX gates are isolated empty-target native import, post-import equivalence/resource-integrity validation, protected-copy production-representative rehearsal, and final migration approval. See `docs/enex-migration.md` and `docs/enex-conversion.md`.
 
 ## Glaze UI 1.0
 
-GoreeCloud Notes targets Glaze UI 1.0.0 and keeps the reusable design-system foundation local to the application. The exact canonical revision and license are recorded under `frontend/src/glaze/`; Notes-specific composition remains separate in `frontend/src/glaze-foundation.css`.
+The frontend vendors the canonical Glaze UI web foundation locally with provenance and license text. Notes maps product styling onto shared semantic tokens and preserves:
 
-The frontend currently includes:
+- System, Light, and Dark appearance;
+- Compact, Medium, Expanded, and Wide adaptive ranges;
+- visible keyboard focus and practical pointer targets;
+- reduced-motion and reduced-transparency fallbacks;
+- increased-contrast and forced-colors behavior; and
+- CI-enforced local-only Glaze conformance.
 
-- Canvas, Solid, Raised, Glaze, and Overlay surface mapping.
-- Semantic Glaze color, depth, radius, spacing, target, and motion tokens.
-- System, Light, and Dark appearance choices stored locally in the browser.
-- Cross-tab appearance synchronization without sending the preference to the server.
-- Compact, Medium, Expanded, and Wide adaptive-range contracts.
-- Visible keyboard focus and practical touch/coarse-pointer targets.
-- Reduced-motion, reduced-transparency, increased-contrast, forced-colors, and no-backdrop-filter fallbacks.
-- A unified Glaze utility overlay for appearance and Account & Security access.
-- A production-build conformance test that verifies the exact canonical Glaze snapshots, load order, local-only UI dependency boundary, responsive ranges, accessibility fallbacks, and appearance contract.
+Source conformance does not replace real-device Compact/Expanded Light/Dark performance and accessibility acceptance before Stable release.
 
-Source conformance does not replace manual Compact/Expanded Light/Dark visual acceptance on supported target browsers and devices before a stable release.
+## Validation model
 
-See `docs/glaze-ui-conformance.md`.
+Every pull-request head runs locked backend/frontend validation plus the full Compose integration chain. Stable-source evidence is accepted only for the **exact head** under review.
 
-## Current Foundation
+The integration chain covers database migration round trips, readiness, authentication/CSRF, administrative audit immutability, login/trusted-proxy behavior, notes/revisions/lifecycle, internal links/backlinks, notebook/tag organization, PostgreSQL search/isolation, attachment authorization/quota/integrity, CLI/browser export, destructive native re-import, Memos import/equivalence/provenance, destructive database-plus-attachment recovery, diagnostics, and clean teardown.
 
-The current native branch includes:
+Production Runtime Preflight uses synthetic production configuration only. A green CI or preflight run is not deployment approval.
 
-- Private authentication with salted `scrypt` credentials, opaque database sessions, CSRF protection, bounded login-abuse controls, password rotation/recovery, active-session review, and global revocation after credential changes.
-- Local administrative account creation, reset, suspension, and reinstatement with append-only privileged-account audit records and production operator/reason requirements.
-- Owner-scoped notes, nested notebooks, tags, pinning, Archive/restore, recoverable Trash, and richer organization management.
-- Structured rich editing, optimistic concurrency, immutable revisions, and conflict-safe restore.
-- Owner-scoped internal note links and backlinks with the portable note document as source of truth and a derived same-owner PostgreSQL relationship index.
-- Built-in private note templates integrated into the Glaze writing workflow.
-- Indexed PostgreSQL full-text search with owner isolation.
-- Private attachment storage, safe raster previews, attachment-ID inline images, aggregate owner quotas, reference-aware deletion protection, and a separate non-destructive attachment-store integrity audit.
-- Verified full-library native ZIP export through administrative CLI and authenticated browser delivery.
-- Verified administrator-operated native re-import into an explicitly confirmed empty existing account, including staged attachment hashing and relationship validation.
-- Destructive disposable native export/re-import/re-export equivalence coverage.
-- Controlled Memos migration inspection, deterministic manifest generation, attachment-byte evidence, explicit empty-target import, post-import verification, and migration-provenance preservation through native portability.
-- Evernote ENEX read-only inspection plus controlled embedded-resource extraction into a newly created local evidence root, including exact-source rechecks, bounded extraction, deterministic generated paths, duplicate-content evidence, and post-write SHA-256 verification without native target mutation.
-- Reproducible frontend/backend dependency locks.
-- Fail-closed production configuration rules for browser origins, secure cookies, trusted proxies, database secrets, attachment storage, and per-owner attachment quota.
-- Separate process liveness (`/health`) and dependency readiness (`/ready`).
-- Centralized privacy-first private API response hardening.
-- Destructive disposable PostgreSQL-plus-attachment backup/restore validation.
-- Dedicated Continuous Integration and Production Runtime Preflight workflows.
-
-## Validation Model
-
-Every pull-request head runs the locked frontend and backend suites plus the full Compose integration chain. Stable-source evidence requires green validation for the exact head under review; a green workflow is not production approval.
-
-The full integration chain covers Alembic round-trip validation, readiness, authentication/CSRF, administrative audit immutability, bounded login/trusted-proxy behavior, note/revision/lifecycle and organization workflows, owner-scoped internal links/backlinks, indexed search/isolation, private attachment authorization/quota/integrity, CLI/browser native export, destructive native re-import, Memos import/equivalence, migration-provenance portability, destructive PostgreSQL-plus-attachment recovery, diagnostics, and clean teardown.
-
-The separate Production Runtime Preflight uses synthetic production configuration only to prove fail-closed configuration rules. It does not touch production data or grant deployment approval.
-
-## Repository Structure
+## Repository structure
 
 ```text
 goreecloud-notes/
-├── frontend/                 # React/TypeScript/Vite web application
-│   └── src/glaze/            # Revision-pinned canonical Glaze UI web snapshot + license
-├── backend/                  # FastAPI application, migrations, lockfile, and tests
+├── frontend/                 # React/TypeScript/Vite + local Glaze UI
+├── backend/                  # FastAPI, migrations, migration tools, tests
 ├── docker/                   # Container/deployment support
-├── docs/                     # Architecture, security, migration, recovery, and readiness records
-├── scripts/                  # Versioned live integration validation
-├── tests/                    # Cross-component and future end-to-end tests
-├── .github/workflows/        # CI and source-level production preflight
-├── .env.example              # Sanitized development configuration template
-├── compose.yml               # Development Compose stack
+├── docs/                     # Architecture, security, migration, recovery
+├── scripts/                  # Versioned integration validation
+├── tests/                    # Cross-component/future end-to-end tests
+├── .github/workflows/        # CI and production-runtime preflight
+├── compose.yml
 ├── CONTRIBUTING.md
 ├── LICENSE
 └── README.md
 ```
 
-## Safety Boundaries
+## Safety boundaries
 
-- Do not commit passwords, tokens, private keys, production session values, or reusable credentials.
-- Do not use production personal/family notes as a development dataset.
-- Do not modify or delete the protected Memos migration source merely because native development advances.
+- Never commit passwords, tokens, private keys, production sessions, or reusable credentials.
+- Never use production personal/family notes as a development dataset.
+- Do not modify or delete protected migration sources merely because native development advances.
 - Do not publish backend ports directly to the public internet.
-- Do not treat a green CI run, static preflight, container build, or draft pull request as production approval.
-- Preserve migration traceability, data portability, backup protection, rollback capability, and owner isolation throughout development.
-- Do not allow arbitrary external URLs to bypass the private attachment model.
-- Do not enable permanent native deletion until retention and recovery policy is separately approved.
+- Do not treat green source validation as production approval.
+- Preserve migration traceability, portability, backup protection, rollback capability, and owner isolation.
+- Do not enable permanent native deletion until retention/recovery policy is separately approved.
 
-## Stable-Release Gates Still Open
+## Stable-release gates still open
 
-Source maturity is not the same as target-environment readiness. Major remaining gates include:
+Major remaining gates include:
 
-- Final Family Services VM placement and persistent storage paths.
-- Protected-copy Memos attachment extraction and production-representative migration rehearsal.
-- Production Kopia repository, encryption, retention, off-host/off-site protection, selected RPO, measured RTO, and isolated restore evidence.
-- Final frontend/static serving, Caddy, trusted-proxy, browser CSP/HSTS, DNS/NetBird reconstruction, and private-publication contract.
-- Production monitoring, alert routing, integrity-audit scheduling, and publication-layer abuse controls.
-- Final attachment capacity/quota, malware scanning/quarantine, large-object behavior, and storage architecture.
-- Production operator/host authorization, canonical operator identity, audit retention/read access/monitoring, and account lifecycle runbooks.
-- Real-device/network Glaze UI performance and accessibility acceptance.
-- ENEX provider-neutral normalization with exact ENML preservation, reviewed ENML conversion, isolated import, post-import equivalence, and protected-copy rehearsal.
-- Populated-library merge/conflict semantics, selective restore, synchronization, scheduled/encrypted export UX, and large-library/background-job policy if later approved.
+- final Family Services VM placement and persistent storage paths;
+- protected-copy Memos migration rehearsal;
+- production Kopia encryption/retention/off-host/off-site recovery with selected RPO and measured RTO;
+- final frontend/static serving, Caddy, trusted proxies, CSP/HSTS, DNS/NetBird reconstruction, and private-publication controls;
+- production monitoring, alert routing, integrity-audit scheduling, and abuse controls;
+- final attachment capacity/quota, malware-scanning/quarantine, large-object behavior, permissions, and storage architecture;
+- operator/host authorization, audit retention/access/monitoring, and account lifecycle runbooks;
+- production image/release/rollback policy and administrator acceptance;
+- real-device/network Glaze performance and accessibility acceptance; and
+- remaining ENEX native-import, equivalence, protected-copy rehearsal, and final migration approval.
 
 ## Documentation
 
-Start with the following records for current implementation boundaries:
+Start with:
 
 - `docs/architecture.md`
 - `docs/account-security.md`
@@ -164,23 +164,22 @@ Start with the following records for current implementation boundaries:
 - `docs/revisions.md`
 - `docs/migration.md`
 - `docs/enex-migration.md`
+- `docs/enex-conversion.md`
 - `docs/portable-export.md`
 - `docs/native-import.md`
 - `docs/backup-restore.md`
 - `docs/production-readiness.md`
 - `docs/glaze-ui-conformance.md`
 
-## Branch Model
+## Branch model
 
 - `main` — reviewed stable repository state.
 - `feature/*` — isolated feature development.
 - `fix/*` — bug fixes.
 - `security/*` — security changes.
 
-A permanent `develop` branch is not required unless project complexity later demonstrates a real need.
+A permanent `develop` branch is not required unless project complexity later demonstrates a concrete need.
 
 ## License
 
-GoreeCloud Notes is licensed under the GNU Affero General Public License v3.0 only (`AGPL-3.0-only`). See `LICENSE`.
-
-The vendored Glaze UI foundation retains the canonical MIT license under `frontend/src/glaze/LICENSE`.
+GoreeCloud Notes is licensed under `AGPL-3.0-only`. The vendored Glaze UI foundation retains its canonical MIT license under `frontend/src/glaze/LICENSE`.
