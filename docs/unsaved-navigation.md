@@ -9,6 +9,7 @@ The browser root mounts `WorkspaceNavigationGuard` for the native Notes workspac
 Protected actions currently include:
 
 - switching notes from the note list;
+- opening resolved outgoing links and backlinks from the Connected notes panel;
 - Home, Notebooks, Tags, Archive, and Trash navigation;
 - direct notebook and tag navigation from the sidebar;
 - creating a new note from the primary and quick-capture actions;
@@ -40,11 +41,19 @@ No analytics, remote UI runtime, remote font, CDN asset, or additional frontend 
 
 `Discard & continue` is the only path that intentionally allows navigation while local changes remain unsaved. Its destructive wording is deliberate.
 
+## Connected-note navigation
+
+The Connected notes panel uses a stable `note-link-open` navigation hook for both outgoing links and backlinks. The guard intercepts that hook in the same capture-phase path used for note cards and primary navigation.
+
+After a guarded relationship navigation is allowed, the App resolves the target note through the authenticated note API and moves to the target's canonical lifecycle collection before opening it. This keeps the target visible and avoids navigating by display title, raw URL, or DOM search.
+
+A save-in-progress relationship button remains available to the guard so the current Save operation can resolve before navigation. Unrelated busy operations can temporarily disable relationship navigation to avoid racing another mutation. Conflict navigation remains available to the guard so the user can explicitly choose Cancel or Discard & continue; Save & continue remains disabled while the conflict is unresolved.
+
 ## Implementation contract
 
-This checkpoint intentionally avoids changing the established App persistence model. The guard observes stable semantic class hooks already emitted by the workspace (`save-state`, `save-button`, note cards, navigation controls, and context-changing editor actions) and intercepts navigation in the browser capture phase before React handles the original click.
+This checkpoint intentionally preserves the established App persistence model. The guard observes stable semantic class hooks emitted by the workspace (`save-state`, `save-button`, note cards, Connected-note buttons, navigation controls, and context-changing editor actions) and intercepts navigation in the browser capture phase before React handles the original click.
 
-`frontend/scripts/validate-navigation-guard.mjs` fails the production frontend build if required interaction hooks, dialog semantics, Glaze resilience behavior, browser-unload protection, or the local-only dependency boundary are removed.
+`frontend/scripts/validate-navigation-guard.mjs` fails the production frontend build if required interaction hooks, Connected-note wiring, lifecycle-view targeting, dialog semantics, Glaze resilience behavior, browser-unload protection, or the local-only dependency boundary are removed.
 
 A later App-state refactor may replace these DOM hooks with an explicit navigation-intent API, but it must preserve the same user-visible safety contract and cannot weaken optimistic-concurrency protection.
 

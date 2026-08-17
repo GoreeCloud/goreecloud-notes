@@ -9,6 +9,9 @@ const guard = readFileSync(resolve(src, "WorkspaceNavigationGuard.tsx"), "utf8")
 const css = readFileSync(resolve(src, "navigation-guard.css"), "utf8");
 const app = readFileSync(resolve(src, "App.tsx"), "utf8");
 const main = readFileSync(resolve(src, "main.tsx"), "utf8");
+const richEditor = readFileSync(resolve(src, "RichNoteEditorCore.tsx"), "utf8");
+const richEditorBoundary = readFileSync(resolve(src, "RichNoteEditor.tsx"), "utf8");
+const noteLinksCss = readFileSync(resolve(src, "note-links.css"), "utf8");
 
 const failures = [];
 
@@ -29,6 +32,7 @@ requireText(guard, 'event.stopImmediatePropagation()', "Guard must stop the orig
 requireText(guard, 'document.querySelector<HTMLElement>(".save-state")', "Guard must derive draft state from the existing save-state contract.");
 requireText(guard, 'document.querySelector<HTMLButtonElement>(".save-button")', "Guard must delegate Save & continue to the existing save action.");
 requireText(guard, '"Archive", "Trash", "Restore"', "Guard must protect state-changing actions that leave the current editing context.");
+requireText(guard, '".note-link-open"', "Guard must intercept Connected notes navigation.");
 requireText(guard, "Discard &amp; continue", "Guard must expose an explicit destructive discard choice.");
 requireText(guard, "Save & continue", "Guard must expose Save & continue.");
 requireText(guard, 'role="dialog"', "Guard must use dialog semantics.");
@@ -41,6 +45,22 @@ for (const hook of ["nav-item", "sidebar-library-item", "note-card", "new-note",
   requireText(app, hook, `App.tsx must retain the guarded ${hook} interaction hook.`);
 }
 
+requireText(app, "async function handleOpenLinkedNote(noteId: string)", "App must own linked-note navigation state changes.");
+requireText(app, "const target = await getNote(noteId);", "Linked-note navigation must resolve the target through the authenticated note API.");
+requireText(app, 'target.state === "archived" ? "archive" : target.state === "trashed" ? "trash" : "home"', "Linked-note navigation must move to the target lifecycle view.");
+requireText(app, "const loaded = await listNotes({ state: target.state });", "Linked-note navigation must rebuild the canonical lifecycle list.");
+requireText(app, "onOpenNote={(noteId) => void handleOpenLinkedNote(noteId)}", "App must connect the rich editor to its linked-note opener.");
+requireText(app, 'navigationDisabled={busy && saveState !== "Saving…"}', "App must prevent unrelated busy operations from racing relationship navigation while keeping active-save interception possible.");
+
+requireText(richEditorBoundary, "onOpenNote: (noteId: string) => void;", "Lazy rich-editor boundary must carry linked-note navigation.");
+requireText(richEditorBoundary, "navigationDisabled?: boolean;", "Lazy rich-editor boundary must carry navigation availability separately from editor editability.");
+requireText(richEditor, 'className="note-link-chip note-link-open"', "Connected notes must render as guarded navigation buttons.");
+requireText(richEditor, 'aria-label={`Open ${label}`}', "Connected-note buttons must expose a descriptive accessible name.");
+requireText(richEditor, "onClick={() => onOpenNote(note.id)}", "Connected-note buttons must open the resolved note by ID.");
+requireText(richEditor, "relationships.outgoing.map((note) => <ConnectedNoteButton", "Outgoing relationships must be navigable.");
+requireText(richEditor, "relationships.backlinks.map((note) => <ConnectedNoteButton", "Backlinks must be navigable.");
+requireText(richEditor, "const relationshipNavigationDisabled = navigationDisabled || linksLoading;", "Relationship navigation must be disabled only for unrelated busy state or relationship refresh.");
+
 requireText(css, "var(--glaze-target-min)", "Guard controls must use the Glaze minimum target token.");
 requireText(css, "var(--glaze-target-comfortable)", "Compact guard controls must use the Glaze comfortable target token.");
 requireText(css, "@media (max-width: 599px)", "Guard must adapt for the Glaze Compact range.");
@@ -51,10 +71,17 @@ requireText(css, "prefers-contrast: more", "Guard must support increased-contras
 requireText(css, "forced-colors: active", "Guard must remain operable in forced-colors mode.");
 requireText(css, "var(--glaze-motion-emphasized)", "Dialog entrance must use the Glaze emphasized motion token.");
 
+requireText(noteLinksCss, "min-height: var(--glaze-target-min)", "Connected-note buttons must use the Glaze minimum target token.");
+requireText(noteLinksCss, "@media (pointer: coarse)", "Connected-note buttons must expand for coarse pointers.");
+requireText(noteLinksCss, "var(--glaze-target-comfortable)", "Connected-note buttons must use the comfortable target on coarse pointers.");
+requireText(noteLinksCss, "button.note-link-chip:focus-visible", "Connected-note buttons must preserve visible keyboard focus.");
+requireText(noteLinksCss, "forced-colors: active", "Connected-note buttons must remain operable in forced-colors mode.");
+
 forbidText(guard, "window.confirm", "Do not replace the Glaze dialog with window.confirm.");
 forbidText(guard, "window.alert", "Do not introduce window.alert into draft protection.");
 forbidText(guard, "http://", "Draft protection must not introduce remote browser dependencies.");
 forbidText(guard, "https://", "Draft protection must not introduce remote browser dependencies.");
+forbidText(richEditor, "window.location", "Connected-note navigation must stay inside the application state model.");
 
 if (failures.length > 0) {
   console.error("Navigation guard validation failed:\n" + failures.map((failure) => `- ${failure}`).join("\n"));

@@ -59,12 +59,31 @@ The Glaze UI toolbar can:
 
 Code blocks refuse internal-link editing because the server document contract intentionally disallows inline marks inside code blocks.
 
+## Connected-note navigation
+
+Resolved outgoing links and backlinks in the **Connected notes** panel are navigation buttons. The button carries only the resolved same-owner note ID from the authenticated relationship response.
+
+The App owns the navigation state transition. When a resolved relationship is opened, it:
+
+1. resolves the target through the existing authenticated `GET /api/v1/notes/{note_id}` boundary;
+2. selects the canonical lifecycle collection for the target — Home for normal notes, Archive for archived notes, and Trash for trashed notes;
+3. reloads that owner-scoped collection;
+4. clears the previous search/filter context so the target remains visible in the note list; and
+5. opens the target through the existing `openNote()` and relation-loading path.
+
+This avoids a second note-loading or persistence model. The relationship panel does not navigate by title, URL, DOM search, or cross-account metadata.
+
+Every Connected-note navigation button uses the `note-link-open` guard hook. If the current note is dirty, still saving, failed to save, or in optimistic-concurrency conflict, `WorkspaceNavigationGuard` intercepts the button before the App navigation callback runs. Save & continue reuses the existing Save action; Discard & continue is the only intentional local-draft-loss path; conflicts remain fail-closed.
+
+Inline `noteLink` marks inside the editable document remain document semantics rather than separate browser anchors in this checkpoint. Direct click-to-open behavior for the inline mark itself can be evaluated separately without changing the portable relationship contract.
+
 ## Glaze UI and accessibility
 
 The relationship panel uses GoreeCloud Glaze semantic variables for text, muted text, lines, accent treatment, and surfaces. It includes:
 
 - visible keyboard focus;
-- practical button target sizing;
+- Glaze minimum pointer targets for Connected-note buttons;
+- comfortable targets on coarse-pointer devices;
 - compact and single-column responsive layouts;
 - forced-colors behavior;
 - reduced-transparency fallback; and
@@ -79,9 +98,9 @@ The implementation is gated by:
 3. live Compose validation proving same-owner outgoing links and backlinks;
 4. live cross-account opacity validation;
 5. live proof that another account's UUID cannot become a resolved relationship row;
-6. frontend lint, TypeScript build, Glaze foundation validation, and bundle-budget validation; and
+6. frontend lint, TypeScript build, Glaze foundation validation, bundle-budget validation, and the navigation-guard source contract verifying both outgoing and backlink navigation; and
 7. existing native export/re-import and backup/restore gates, which continue to exercise the authoritative document and PostgreSQL database respectively.
 
 ## Deliberate boundaries
 
-This checkpoint does not add public URLs, remote sharing, web-link previews, cross-account linking, automatic title mutation, or permanent-deletion semantics. Those features require separate privacy, security, migration, and usability decisions.
+This checkpoint does not add public URLs, remote sharing, web-link previews, cross-account linking, automatic title mutation, direct inline-mark browser navigation, or permanent-deletion semantics. Those features require separate privacy, security, migration, and usability decisions.

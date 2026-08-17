@@ -101,7 +101,9 @@ type RichNoteEditorProps = {
   noteId: string;
   value: NoteDocument;
   disabled?: boolean;
+  navigationDisabled?: boolean;
   onChange: (document: NoteDocument) => void;
+  onOpenNote: (noteId: string) => void;
 };
 
 type ToolbarButtonProps = {
@@ -109,6 +111,12 @@ type ToolbarButtonProps = {
   active?: boolean;
   disabled?: boolean;
   onClick: () => void;
+};
+
+type ConnectedNoteButtonProps = {
+  note: LinkedNote;
+  disabled: boolean;
+  onOpenNote: (noteId: string) => void;
 };
 
 const EMPTY_LINKS: NoteLinks = { outgoing: [], backlinks: [] };
@@ -132,7 +140,22 @@ function noteLabel(note: Pick<Note | LinkedNote, "title" | "state">): string {
   return note.state === "normal" ? title : `${title} · ${note.state}`;
 }
 
-export function RichNoteEditor({ noteId, value, disabled = false, onChange }: RichNoteEditorProps) {
+function ConnectedNoteButton({ note, disabled, onOpenNote }: ConnectedNoteButtonProps) {
+  const label = noteLabel(note);
+  return (
+    <button
+      className="note-link-chip note-link-open"
+      type="button"
+      aria-label={`Open ${label}`}
+      disabled={disabled}
+      onClick={() => onOpenNote(note.id)}
+    >
+      {label}
+    </button>
+  );
+}
+
+export function RichNoteEditor({ noteId, value, disabled = false, navigationDisabled = false, onChange, onOpenNote }: RichNoteEditorProps) {
   const [imageAttachments, setImageAttachments] = useState<Attachment[]>([]);
   const [selectedImageId, setSelectedImageId] = useState("");
   const [attachmentStatus, setAttachmentStatus] = useState("");
@@ -270,6 +293,7 @@ export function RichNoteEditor({ noteId, value, disabled = false, onChange }: Ri
   const selectedTemplate = noteTemplateById(selectedTemplateId);
   const selectedLink = linkCandidates.find((note) => note.id === selectedLinkId) ?? null;
   const linkEditingBlocked = disabled || editor.isActive("codeBlock");
+  const relationshipNavigationDisabled = navigationDisabled || linksLoading;
 
   function insertSelectedImage() {
     if (!selectedImage || disabled || !editor) return;
@@ -507,14 +531,14 @@ export function RichNoteEditor({ noteId, value, disabled = false, onChange }: Ri
           <div>
             <span className="note-links-label">Links from this note</span>
             <div className="note-link-chip-list">
-              {relationships.outgoing.map((note) => <span className="note-link-chip" key={note.id}>{noteLabel(note)}</span>)}
+              {relationships.outgoing.map((note) => <ConnectedNoteButton note={note} key={note.id} disabled={relationshipNavigationDisabled} onOpenNote={onOpenNote} />)}
               {relationships.outgoing.length === 0 ? <span className="note-links-empty">No resolved outgoing links yet.</span> : null}
             </div>
           </div>
           <div>
             <span className="note-links-label">Links to this note</span>
             <div className="note-link-chip-list">
-              {relationships.backlinks.map((note) => <span className="note-link-chip" key={note.id}>{noteLabel(note)}</span>)}
+              {relationships.backlinks.map((note) => <ConnectedNoteButton note={note} key={note.id} disabled={relationshipNavigationDisabled} onOpenNote={onOpenNote} />)}
               {relationships.backlinks.length === 0 ? <span className="note-links-empty">No backlinks yet.</span> : null}
             </div>
           </div>

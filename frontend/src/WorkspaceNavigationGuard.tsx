@@ -13,6 +13,7 @@ const NAVIGATION_SELECTOR = [
   ".nav-item",
   ".sidebar-library-item",
   ".note-card",
+  ".note-link-open",
   ".new-note",
   ".quick-capture",
   ".account-footer > button",

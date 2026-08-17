@@ -108,25 +108,47 @@
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  min-height: 28px;
+  min-height: var(--glaze-target-min);
   align-items: center;
 }
 
 .note-link-chip {
   display: inline-flex;
   align-items: center;
-  min-height: 28px;
+  min-height: var(--glaze-target-min);
   max-width: 100%;
-  padding: 4px 8px;
+  padding: 6px 10px;
   overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--glaze-accent) 20%, var(--glaze-line));
   border-radius: 999px;
   color: var(--glaze-text);
   background: color-mix(in srgb, var(--glaze-accent) 7%, var(--glaze-surface-muted));
+  font: inherit;
   font-size: 0.76rem;
   font-weight: 650;
+  line-height: 1.2;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+button.note-link-chip {
+  cursor: pointer;
+}
+
+button.note-link-chip:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--glaze-accent) 48%, var(--glaze-line));
+  color: var(--glaze-accent);
+  background: color-mix(in srgb, var(--glaze-accent) 12%, var(--glaze-surface-muted));
+}
+
+button.note-link-chip:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--glaze-accent) 58%, transparent);
+  outline-offset: 2px;
+}
+
+button.note-link-chip:disabled {
+  cursor: not-allowed;
+  opacity: 0.52;
 }
 
 @media (max-width: 760px) {
@@ -137,6 +159,13 @@
 
   .note-links-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (pointer: coarse) {
+  .note-link-chip,
+  .note-links-heading button {
+    min-height: var(--glaze-target-comfortable);
   }
 }
 
@@ -158,5 +187,9 @@
     background: Canvas;
     color: CanvasText;
     forced-color-adjust: auto;
+  }
+
+  button.note-link-chip:focus-visible {
+    outline-color: Highlight;
   }
 }

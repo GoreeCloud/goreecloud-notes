@@ -6,7 +6,9 @@ export type RichNoteEditorProps = {
   noteId: string;
   value: NoteDocument;
   disabled?: boolean;
+  navigationDisabled?: boolean;
   onChange: (document: NoteDocument) => void;
+  onOpenNote: (noteId: string) => void;
 };
 
 const LazyRichNoteEditor = lazy(async () => {
