@@ -1,11 +1,12 @@
 # Evernote ENEX Migration
 
-GoreeCloud Notes includes two source-validated Evernote ENEX migration checkpoints:
+GoreeCloud Notes includes three source-contained Evernote ENEX migration checkpoints:
 
-1. **read-only ENEX inspection**, which validates and inventories an operator-supplied `.enex` file without mutation; and
-2. **controlled ENEX resource extraction**, which writes embedded resource bytes only into a newly created local evidence directory, verifies every written object with SHA-256, and never writes native GoreeCloud Notes application data.
+1. **read-only ENEX inspection**, which validates and inventories an operator-supplied `.enex` file without mutation;
+2. **controlled ENEX resource extraction**, which writes embedded resource bytes only into a newly created local evidence directory, verifies every written object with SHA-256, and never writes native GoreeCloud Notes application data; and
+3. **provider-neutral ENEX note normalization**, which preserves the original UTF-8 ENML CDATA payload exactly, binds resource references to validated extraction evidence, normalizes source metadata into a deterministic review artifact, and still performs no ENML conversion or native import.
 
-These checkpoints deliberately stop before provider-neutral note normalization, ENML conversion, native import, or production migration.
+These checkpoints deliberately stop before reviewed ENML-to-`goreecloud.blocks` conversion, native import, or production migration.
 
 ## Stage 1 — Read-only ENEX inspection
 
@@ -133,17 +134,97 @@ The deterministic `goreecloud-notes-enex-resource-evidence` schema version 1 doc
 
 The evidence intentionally contains no destination-absolute path and no generation timestamp, so the same source bytes and extraction limits produce the same logical evidence regardless of where the operator stores the extraction directory.
 
+## Stage 3 — Provider-neutral note normalization with exact ENML preservation
+
+Normalization is intentionally a **zero-write review stage**. It does not use the native database, create native notes, or interpret ENML into the GoreeCloud rich-document model.
+
+For an ENEX export that contains resources, first create Stage 2 evidence and pass the exact evidence JSON to the normalizer:
+
+```bash
+python -m app.migration.enex_normalization \
+  /path/to/export.enex \
+  --resource-evidence /path/to/new-enex-resource-evidence/enex-resource-evidence.json \
+  > /path/to/enex-normalization.json
+```
+
+For an ENEX export with no embedded resources, `--resource-evidence` is not required:
+
+```bash
+python -m app.migration.enex_normalization \
+  /path/to/resource-free-export.enex \
+  > /path/to/enex-normalization.json
+```
+
+The command exits with status `0` after emitting a deterministic artifact. Unsafe input, metadata-invalid input, source/evidence mismatch, unsupported exact-preservation input, tampered evidence, or invalid limits exit with status `2`.
+
+### Exact ENML boundary
+
+The normalizer treats original ENML as evidence, not as already converted rich text.
+
+To prevent silent parser normalization from changing the original content, this stage requires UTF-8 ENEX input with exactly one CDATA `<content>` payload per note. It captures the bytes **inside the original CDATA section directly from the ENEX source**, decodes those bytes as UTF-8 without replacement, stores the resulting ENML string, and records the original byte length and SHA-256.
+
+This means line endings and all ENML characters inside the CDATA payload are preserved exactly. If a source represents note content in another XML form, the normalizer refuses it rather than pretending exact preservation occurred.
+
+The artifact explicitly records:
+
+- `exactEnmlPreserved: true`;
+- `enmlConversionPerformed: false`;
+- `nativeDocumentCreated: false`;
+- `sourceMutationPerformed: false`; and
+- `targetMutationPerformed: false`.
+
+### Resource-evidence binding
+
+When the ENEX source contains resources, normalization requires the Stage 2 evidence document and independently validates it against the exact source ENEX.
+
+The validator checks:
+
+- the resource-evidence format and schema version;
+- exact source ENEX SHA-256 and byte size;
+- metadata-valid inspection state;
+- completed extraction state;
+- non-mutation and non-overwrite evidence flags;
+- expected resource count and total bytes;
+- one-to-one note/resource indexes;
+- normalized MIME type;
+- original Evernote filename and MD5 metadata;
+- generated resource path safety;
+- decoded resource SHA-256 and byte size; and
+- duplicate-content references.
+
+The normalizer recalculates each resource SHA-256 from the ENEX embedded bytes rather than trusting the evidence JSON. A copied, edited, mismatched, or path-tampered evidence document is therefore refused.
+
+The normalization artifact records the SHA-256 and byte size of the exact evidence JSON it accepted, allowing later conversion/import tooling to require the same evidence set.
+
+### Normalization artifact
+
+The deterministic `goreecloud-notes-enex-normalization` schema version 1 artifact records:
+
+- exact ENEX source fingerprint and export metadata;
+- source inspection warnings;
+- note/deleted-note/tag/resource inventory;
+- exact original ENML plus per-note ENML SHA-256 and byte size;
+- source title;
+- normalized UTC created/updated/deleted timestamps;
+- every tag in source order, including its original value and trimmed comparison name;
+- note-attributes metadata without interpreting it into native behavior;
+- resource references bound to Stage 2 evidence;
+- resource-attributes, recognition, and alternate-data metadata snapshots when present;
+- deterministic per-note record SHA-256 values; and
+- explicit proof that ENML conversion and native persistence did not occur.
+
+The artifact contains no source absolute path and no generated timestamp, so repeated normalization of the same accepted source and resource evidence produces the same logical output.
+
 ## Current ENEX migration state
 
-ENEX resource **inspection and extraction evidence** are source-implemented checkpoints. They are not ENEX import support.
+ENEX **inspection, resource extraction evidence, and provider-neutral note normalization with exact original ENML preservation** are source-implemented checkpoints. They are not ENEX native-import support.
 
 The remaining ENEX-specific stages stay separately gated:
 
-1. provider-neutral normalization of note metadata while preserving exact original ENML;
-2. reviewed ENML-to-`goreecloud.blocks` conversion semantics;
-3. isolated empty-target native import;
-4. post-import equivalence and resource-integrity validation;
-5. production-representative migration rehearsal against a protected source copy; and
-6. final migration approval.
+1. reviewed ENML-to-`goreecloud.blocks` conversion semantics;
+2. isolated empty-target native import;
+3. post-import equivalence and resource-integrity validation;
+4. production-representative migration rehearsal against a protected source copy; and
+5. final migration approval.
 
 Until those stages are implemented and validated together, GoreeCloud Notes must not claim production ENEX migration readiness.
