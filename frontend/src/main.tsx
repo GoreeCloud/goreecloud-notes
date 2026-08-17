@@ -5,6 +5,7 @@ import AccountSecurityPage from "./AccountSecurityPage";
 import App from "./App";
 import { AppearanceControl } from "./AppearanceControl";
 import { initializeAppearancePreference } from "./appearance";
+import { WorkspaceNavigationGuard } from "./WorkspaceNavigationGuard";
 import "./glaze/glaze.css";
 import "./glaze/glaze.accessibility.css";
 import "./styles.css";
@@ -48,6 +49,7 @@ function Root() {
           </a>
         ) : null}
       </aside>
+      <WorkspaceNavigationGuard />
     </div>
   );
 }
