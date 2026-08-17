@@ -1,6 +1,8 @@
-import { useState, type ChangeEvent } from "react";
+import { useEffect, useState, type ChangeEvent } from "react";
 
 import {
+  APPEARANCE_STORAGE_KEY,
+  applyAppearancePreference,
   readAppearancePreference,
   saveAppearancePreference,
   type AppearancePreference,
@@ -14,6 +16,18 @@ const APPEARANCE_OPTIONS: Array<{ value: AppearancePreference; label: string }> 
 
 export function AppearanceControl() {
   const [preference, setPreference] = useState<AppearancePreference>(() => readAppearancePreference());
+
+  useEffect(() => {
+    function handleStorage(event: StorageEvent) {
+      if (event.key !== APPEARANCE_STORAGE_KEY && event.key !== null) return;
+      const nextPreference = readAppearancePreference();
+      setPreference(nextPreference);
+      applyAppearancePreference(nextPreference);
+    }
+
+    window.addEventListener("storage", handleStorage);
+    return () => window.removeEventListener("storage", handleStorage);
+  }, []);
 
   function handleChange(event: ChangeEvent<HTMLSelectElement>) {
     const nextPreference = event.target.value as AppearancePreference;

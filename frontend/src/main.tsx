@@ -12,6 +12,7 @@ import "./organization.css";
 import "./rich-editor.css";
 import "./attachments.css";
 import "./account-security.css";
+import "./glaze-theme-bridge.css";
 import "./glaze-foundation.css";
 
 initializeAppearancePreference();
