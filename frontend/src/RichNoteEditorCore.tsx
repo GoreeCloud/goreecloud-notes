@@ -15,6 +15,7 @@ import {
   type NoteDocument,
   type TiptapNode,
 } from "./document";
+import { NOTE_TEMPLATES, noteTemplateById } from "./noteTemplates";
 
 const AttachmentImage = Node.create({
   name: "attachmentImage",
@@ -91,6 +92,8 @@ export function RichNoteEditor({ noteId, value, disabled = false, onChange }: Ri
   const [imageAttachments, setImageAttachments] = useState<Attachment[]>([]);
   const [selectedImageId, setSelectedImageId] = useState("");
   const [attachmentStatus, setAttachmentStatus] = useState("");
+  const [selectedTemplateId, setSelectedTemplateId] = useState(NOTE_TEMPLATES[0]?.id ?? "");
+  const [templateStatus, setTemplateStatus] = useState("");
 
   const editor = useEditor({
     extensions: [
@@ -129,6 +132,7 @@ export function RichNoteEditor({ noteId, value, disabled = false, onChange }: Ri
 
   useEffect(() => {
     let cancelled = false;
+    setTemplateStatus("");
     void listAttachments(noteId)
       .then((attachments) => {
         if (cancelled) return;
@@ -172,6 +176,7 @@ export function RichNoteEditor({ noteId, value, disabled = false, onChange }: Ri
   }
 
   const selectedImage = imageAttachments.find((attachment) => attachment.id === selectedImageId) ?? null;
+  const selectedTemplate = noteTemplateById(selectedTemplateId);
 
   function insertSelectedImage() {
     if (!selectedImage || disabled || !editor) return;
@@ -189,6 +194,29 @@ export function RichNoteEditor({ noteId, value, disabled = false, onChange }: Ri
         { type: "paragraph" },
       ])
       .run();
+  }
+
+  function insertSelectedTemplate() {
+    if (!selectedTemplate || disabled || !editor) return;
+
+    const templateRoot = goreeToTiptap(selectedTemplate.document);
+    const blocks = templateRoot.content ?? [];
+    const inserted = editor.isEmpty
+      ? editor.commands.setContent(templateRoot)
+      : editor
+        .chain()
+        .focus()
+        .insertContent([
+          { type: "horizontalRule" },
+          ...blocks,
+        ])
+        .run();
+
+    setTemplateStatus(
+      inserted
+        ? `Inserted ${selectedTemplate.label}.`
+        : `Could not insert ${selectedTemplate.label}.`,
+    );
   }
 
   return (
@@ -261,6 +289,26 @@ export function RichNoteEditor({ noteId, value, disabled = false, onChange }: Ri
         <span className="rich-toolbar-separator" aria-hidden="true" />
         <select
           className="rich-toolbar-select"
+          aria-label="Note template"
+          value={selectedTemplateId}
+          disabled={disabled || NOTE_TEMPLATES.length === 0}
+          onChange={(event) => {
+            setSelectedTemplateId(event.target.value);
+            setTemplateStatus("");
+          }}
+        >
+          {NOTE_TEMPLATES.map((template) => (
+            <option value={template.id} key={template.id}>{template.label}</option>
+          ))}
+        </select>
+        <ToolbarButton
+          label="Insert template"
+          disabled={disabled || selectedTemplate === null}
+          onClick={insertSelectedTemplate}
+        />
+        <span className="rich-toolbar-separator" aria-hidden="true" />
+        <select
+          className="rich-toolbar-select"
           aria-label="Inline image attachment"
           value={selectedImageId}
           disabled={disabled || imageAttachments.length === 0}
@@ -289,6 +337,11 @@ export function RichNoteEditor({ noteId, value, disabled = false, onChange }: Ri
           onClick={() => editor.chain().focus().redo().run()}
         />
       </div>
+      {selectedTemplate ? (
+        <div className="rich-toolbar-status" aria-live="polite">
+          {templateStatus || selectedTemplate.description}
+        </div>
+      ) : null}
       {attachmentStatus ? <div className="rich-toolbar-status" role="status">{attachmentStatus}</div> : null}
       <EditorContent editor={editor} />
     </div>
