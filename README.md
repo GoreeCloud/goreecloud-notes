@@ -61,8 +61,8 @@ The native branch includes:
 - append-only privileged-account audit records with production operator/reason requirements;
 - owner-scoped notes, notebooks, nested notebooks, tags, pinning, Archive, recoverable Trash, and organization management;
 - structured rich editing, optimistic concurrency, immutable revisions, and conflict-safe restore;
-- a Glaze unsaved-draft navigation guard that protects note/view changes, new-note actions, sign-out, Archive/Trash/Restore context changes, and browser unload while preserving explicit Save and the existing optimistic-concurrency path;
-- owner-scoped internal note links/backlinks with the portable note document as source of truth and a derived same-owner PostgreSQL lookup index;
+- a Glaze unsaved-draft navigation guard that protects note/view changes, Connected-note navigation, new-note actions, sign-out, Archive/Trash/Restore context changes, and browser unload while preserving explicit Save and the existing optimistic-concurrency path;
+- owner-scoped internal note links/backlinks with the portable note document as source of truth, a derived same-owner PostgreSQL lookup index, and guarded navigation from resolved outgoing/backlink relationships;
 - built-in private note templates;
 - indexed owner-isolated PostgreSQL full-text search;
 - private attachment storage, safe raster previews, attachment-ID inline images, owner quotas, reference-aware deletion protection, and non-destructive attachment integrity auditing;
@@ -78,6 +78,8 @@ The native branch includes:
 - dedicated Continuous Integration and Production Runtime Preflight workflows.
 
 The draft-navigation guard presents a local Glaze Overlay with **Cancel**, **Discard & continue**, and **Save & continue**. Save & continue activates the existing Save action rather than implementing a second persistence path; failed saves and optimistic-concurrency conflicts keep navigation blocked. Only the explicitly destructive discard path may intentionally leave a local draft unsaved. See `docs/unsaved-navigation.md`.
+
+Resolved outgoing links and backlinks in **Connected notes** are now buttons that pass through the same draft-protection boundary. After navigation is allowed, the App resolves the target by owner-authenticated note ID, moves to its canonical lifecycle collection (Home, Archive, or Trash), reloads that owner-scoped list, and opens it through the existing note-loading path. Inline `noteLink` marks inside the editable document remain portable document semantics rather than separate browser anchors in this checkpoint. See `docs/internal-note-links.md`.
 
 ## Evernote migration boundary
 
@@ -110,7 +112,7 @@ Source conformance does not replace real-device Compact/Expanded Light/Dark perf
 
 Every pull-request head runs locked backend/frontend validation plus the full Compose integration chain. Stable-source evidence is accepted only for the **exact head** under review.
 
-The integration chain covers database migration round trips, readiness, authentication/CSRF, administrative audit immutability, login/trusted-proxy behavior, notes/revisions/lifecycle, internal links/backlinks, notebook/tag organization, PostgreSQL search/isolation, attachment authorization/quota/integrity, CLI/browser export, destructive native re-import, Memos import/equivalence/provenance, destructive database-plus-attachment recovery, diagnostics, and clean teardown. The frontend production build separately fails closed if the unsaved-navigation interaction contract or its Glaze accessibility/resilience requirements regress.
+The integration chain covers database migration round trips, readiness, authentication/CSRF, administrative audit immutability, login/trusted-proxy behavior, notes/revisions/lifecycle, internal links/backlinks, notebook/tag organization, PostgreSQL search/isolation, attachment authorization/quota/integrity, CLI/browser export, destructive native re-import, Memos import/equivalence/provenance, destructive database-plus-attachment recovery, diagnostics, and clean teardown. The frontend production build separately fails closed if the unsaved-navigation interaction contract, Connected-note navigation wiring/lifecycle targeting, or Glaze accessibility/resilience requirements regress.
 
 Production Runtime Preflight uses synthetic production configuration only. A green CI or preflight run is not deployment approval.
 
@@ -153,7 +155,7 @@ Major remaining gates include:
 - final attachment capacity/quota, malware-scanning/quarantine, large-object behavior, permissions, and storage architecture;
 - operator/host authorization, audit retention/access/monitoring, and account lifecycle runbooks;
 - production image/release/rollback policy and administrator acceptance;
-- real-device/network Glaze performance, accessibility, and draft-navigation acceptance; and
+- real-device/network Glaze performance, accessibility, draft-navigation, and Connected-note navigation acceptance; and
 - remaining ENEX native-import, equivalence, protected-copy rehearsal, and final migration approval.
 
 ## Documentation
@@ -167,6 +169,7 @@ Start with:
 - `docs/attachment-integrity.md`
 - `docs/revisions.md`
 - `docs/unsaved-navigation.md`
+- `docs/internal-note-links.md`
 - `docs/migration.md`
 - `docs/enex-migration.md`
 - `docs/enex-conversion.md`
