@@ -1,6 +1,6 @@
 """Structural tests for the native GoreeCloud Notes persistence model."""
 
-from sqlalchemy import CheckConstraint, UniqueConstraint
+from sqlalchemy import CheckConstraint, ForeignKeyConstraint, UniqueConstraint
 
 from app import admin_audit, login_security, models  # noqa: F401
 from app.database import Base
@@ -15,6 +15,7 @@ def test_native_core_tables_are_registered() -> None:
         "login_rate_buckets",
         "migration_imports",
         "migration_note_records",
+        "note_links",
         "note_revisions",
         "note_tags",
         "notebooks",
@@ -30,6 +31,7 @@ def test_user_owned_entities_keep_explicit_owner_scope() -> None:
         "attachments",
         "migration_imports",
         "migration_note_records",
+        "note_links",
         "note_revisions",
         "note_tags",
         "notebooks",
@@ -38,6 +40,41 @@ def test_user_owned_entities_keep_explicit_owner_scope() -> None:
     ):
         owner = Base.metadata.tables[table_name].c.owner_id
         assert owner.nullable is False
+
+
+def test_note_links_are_same_owner_derived_relationships() -> None:
+    links = Base.metadata.tables["note_links"]
+
+    assert {"owner_id", "source_note_id", "target_note_id", "created_at"} == set(links.c.keys())
+    assert tuple(column.name for column in links.primary_key.columns) == (
+        "owner_id",
+        "source_note_id",
+        "target_note_id",
+    )
+
+    checks = {
+        str(constraint.sqltext)
+        for constraint in links.constraints
+        if isinstance(constraint, CheckConstraint)
+    }
+    assert "source_note_id <> target_note_id" in checks
+
+    foreign_keys = {
+        (
+            tuple(column.name for column in constraint.columns),
+            tuple(element.target_fullname for element in constraint.elements),
+        )
+        for constraint in links.constraints
+        if isinstance(constraint, ForeignKeyConstraint)
+    }
+    assert (
+        ("owner_id", "source_note_id"),
+        ("notes.owner_id", "notes.id"),
+    ) in foreign_keys
+    assert (
+        ("owner_id", "target_note_id"),
+        ("notes.owner_id", "notes.id"),
+    ) in foreign_keys
 
 
 def test_authentication_tables_do_not_store_raw_browser_secrets() -> None:
