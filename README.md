@@ -22,7 +22,7 @@ GoreeCloud Notes combines fast capture with an Evernote-class knowledge workspac
 - Full-text search and filtering.
 - Revision history and recovery.
 - Portable full-library export and controlled import/migration tooling.
-- Internal note links, backlinks, templates, and richer knowledge organization in later milestones.
+- Owner-scoped internal note links/backlinks and private templates, with richer knowledge organization in later milestones.
 - Firefox-first browser capture in a later milestone.
 - Offline synchronization and mobile clients only after the server and synchronization contracts are mature.
 
@@ -49,7 +49,7 @@ Current technology direction:
 - Design system: canonical GoreeCloud Glaze UI 1.0.0 with a locally vendored, revision-pinned web foundation.
 - Rich editor: Tiptap/ProseMirror behind an application-owned `goreecloud.blocks` document contract.
 - Backend: Python + FastAPI.
-- Database: PostgreSQL with SQLAlchemy and Alembic migrations through `0007_admin_audit_events`.
+- Database: PostgreSQL with SQLAlchemy and Alembic migrations through `0008_note_links`.
 - Search: PostgreSQL generated `tsvector` plus GIN index initially.
 - API: versioned private HTTP APIs designed for browser, extension, and future mobile clients.
 - Deployment: Docker and Docker Compose for development/integration validation; production placement is not approved.
@@ -83,13 +83,15 @@ The current native branch includes:
 - Local administrative account creation, reset, suspension, and reinstatement with append-only privileged-account audit records and production operator/reason requirements.
 - Owner-scoped notes, nested notebooks, tags, pinning, Archive/restore, recoverable Trash, and richer organization management.
 - Structured rich editing, optimistic concurrency, immutable revisions, and conflict-safe restore.
+- Owner-scoped internal note links and backlinks with the portable note document as source of truth and a derived same-owner PostgreSQL relationship index.
+- Built-in private note templates integrated into the Glaze writing workflow.
 - Indexed PostgreSQL full-text search with owner isolation.
 - Private attachment storage, safe raster previews, attachment-ID inline images, aggregate owner quotas, reference-aware deletion protection, and a separate non-destructive attachment-store integrity audit.
 - Verified full-library native ZIP export through administrative CLI and authenticated browser delivery.
 - Verified administrator-operated native re-import into an explicitly confirmed empty existing account, including staged attachment hashing and relationship validation.
 - Destructive disposable native export/re-import/re-export equivalence coverage.
 - Controlled Memos migration inspection, deterministic manifest generation, attachment-byte evidence, explicit empty-target import, post-import verification, and migration-provenance preservation through native portability.
-- A read-only Evernote ENEX inspection checkpoint that validates source structure, timestamps, embedded-resource integrity, source SHA-256, and mutation-free inventory without yet claiming ENML conversion or import readiness.
+- Evernote ENEX read-only inspection plus controlled embedded-resource extraction into a newly created local evidence root, including exact-source rechecks, bounded extraction, deterministic generated paths, duplicate-content evidence, and post-write SHA-256 verification without native target mutation.
 - Reproducible frontend/backend dependency locks.
 - Fail-closed production configuration rules for browser origins, secure cookies, trusted proxies, database secrets, attachment storage, and per-owner attachment quota.
 - Separate process liveness (`/health`) and dependency readiness (`/ready`).
@@ -101,7 +103,7 @@ The current native branch includes:
 
 Every pull-request head runs the locked frontend and backend suites plus the full Compose integration chain. Stable-source evidence requires green validation for the exact head under review; a green workflow is not production approval.
 
-The full integration chain covers Alembic round-trip validation, readiness, authentication/CSRF, administrative audit immutability, bounded login/trusted-proxy behavior, note/revision/lifecycle and organization workflows, indexed search/isolation, private attachment authorization/quota/integrity, CLI/browser native export, destructive native re-import, Memos import/equivalence, migration-provenance portability, destructive PostgreSQL-plus-attachment recovery, diagnostics, and clean teardown.
+The full integration chain covers Alembic round-trip validation, readiness, authentication/CSRF, administrative audit immutability, bounded login/trusted-proxy behavior, note/revision/lifecycle and organization workflows, owner-scoped internal links/backlinks, indexed search/isolation, private attachment authorization/quota/integrity, CLI/browser native export, destructive native re-import, Memos import/equivalence, migration-provenance portability, destructive PostgreSQL-plus-attachment recovery, diagnostics, and clean teardown.
 
 The separate Production Runtime Preflight uses synthetic production configuration only to prove fail-closed configuration rules. It does not touch production data or grant deployment approval.
 
@@ -147,7 +149,7 @@ Source maturity is not the same as target-environment readiness. Major remaining
 - Final attachment capacity/quota, malware scanning/quarantine, large-object behavior, and storage architecture.
 - Production operator/host authorization, canonical operator identity, audit retention/read access/monitoring, and account lifecycle runbooks.
 - Real-device/network Glaze UI performance and accessibility acceptance.
-- ENEX resource extraction, provider-neutral normalization, reviewed ENML conversion, isolated import, post-import equivalence, and protected-copy rehearsal.
+- ENEX provider-neutral normalization with exact ENML preservation, reviewed ENML conversion, isolated import, post-import equivalence, and protected-copy rehearsal.
 - Populated-library merge/conflict semantics, selective restore, synchronization, scheduled/encrypted export UX, and large-library/background-job policy if later approved.
 
 ## Documentation

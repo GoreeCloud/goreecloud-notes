@@ -15,6 +15,13 @@ from ..config import get_settings
 from ..database import SessionLocal
 from ..models import User
 from .enex import DEFAULT_MAX_ENEX_BYTES, format_text_report as format_enex_text_report, inspect_enex_export
+from .enex_resources import (
+    DEFAULT_MAX_ENEX_EXTRACTED_BYTES,
+    DEFAULT_MAX_ENEX_RESOURCE_BYTES,
+    DEFAULT_MAX_ENEX_RESOURCE_COUNT,
+    extract_enex_resources,
+    serialize_enex_resource_evidence,
+)
 from .evidence import DEFAULT_MAX_MANIFEST_BYTES, serialize_evidence, verify_attachment_binaries
 from .importer import (
     DEFAULT_MAX_INPUT_BYTES,
@@ -64,7 +71,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
             "GoreeCloud Notes migration tools. Inspection, manifest, evidence, and verification commands are read-only. "
-            "The import command writes only to an explicitly confirmed empty native account and never connects to Memos."
+            "ENEX resource extraction writes only to a newly created local evidence directory and never to native "
+            "application data. The import command writes only to an explicitly confirmed empty native account and "
+            "never connects to Memos."
         )
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -82,6 +91,44 @@ def build_parser() -> argparse.ArgumentParser:
     )
     _add_enex_arguments(inspect_enex)
     inspect_enex.add_argument("--json", action="store_true", help="Emit a machine-readable ENEX inventory report.")
+
+    extract_enex = subparsers.add_parser(
+        "extract-enex-resources",
+        help=(
+            "Extract validated embedded ENEX resources into a new local evidence directory with SHA-256 verification. "
+            "This command never writes native Notes data."
+        ),
+    )
+    _add_enex_arguments(extract_enex)
+    extract_enex.add_argument(
+        "output",
+        type=Path,
+        help="New extraction directory to create. The path must not already exist.",
+    )
+    extract_enex.add_argument(
+        "--max-resource-bytes",
+        type=int,
+        default=DEFAULT_MAX_ENEX_RESOURCE_BYTES,
+        help=(
+            "Maximum decoded size of any one ENEX resource "
+            f"(default: {DEFAULT_MAX_ENEX_RESOURCE_BYTES} bytes)."
+        ),
+    )
+    extract_enex.add_argument(
+        "--max-total-resource-bytes",
+        type=int,
+        default=DEFAULT_MAX_ENEX_EXTRACTED_BYTES,
+        help=(
+            "Maximum decoded size of all ENEX resources "
+            f"(default: {DEFAULT_MAX_ENEX_EXTRACTED_BYTES} bytes)."
+        ),
+    )
+    extract_enex.add_argument(
+        "--max-resources",
+        type=int,
+        default=DEFAULT_MAX_ENEX_RESOURCE_COUNT,
+        help=f"Maximum number of ENEX resources to extract (default: {DEFAULT_MAX_ENEX_RESOURCE_COUNT}).",
+    )
 
     manifest = subparsers.add_parser(
         "build-memos-manifest",
@@ -139,8 +186,20 @@ def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
 
-    if args.command in {"inspect-memos-export", "build-memos-manifest", "inspect-enex-export"} and args.max_bytes <= 0:
+    if args.command in {
+        "inspect-memos-export",
+        "build-memos-manifest",
+        "inspect-enex-export",
+        "extract-enex-resources",
+    } and args.max_bytes <= 0:
         parser.error("--max-bytes must be positive.")
+    if args.command == "extract-enex-resources":
+        if args.max_resource_bytes <= 0:
+            parser.error("--max-resource-bytes must be positive.")
+        if args.max_total_resource_bytes <= 0:
+            parser.error("--max-total-resource-bytes must be positive.")
+        if args.max_resources <= 0:
+            parser.error("--max-resources must be positive.")
     if args.command == "verify-attachment-binaries" and args.max_manifest_bytes <= 0:
         parser.error("--max-manifest-bytes must be positive.")
     if args.command == "import-memos-manifest" and args.max_input_bytes <= 0:
@@ -164,6 +223,18 @@ def main() -> int:
             else:
                 print(format_enex_text_report(report), end="")
             return 0 if report.metadata_valid else 3
+
+        if args.command == "extract-enex-resources":
+            evidence = extract_enex_resources(
+                args.export,
+                args.output,
+                max_bytes=args.max_bytes,
+                max_resource_bytes=args.max_resource_bytes,
+                max_total_bytes=args.max_total_resource_bytes,
+                max_resources=args.max_resources,
+            )
+            sys.stdout.write(serialize_enex_resource_evidence(evidence))
+            return 0
 
         if args.command == "build-memos-manifest":
             manifest = build_memos_manifest(args.export, max_bytes=args.max_bytes)
