@@ -97,6 +97,18 @@ The current native branch includes:
 - Destructive disposable PostgreSQL-plus-attachment backup/restore validation.
 - Dedicated Continuous Integration and Production Runtime Preflight workflows.
 
+## Exact Validation Checkpoint
+
+Exact head `0648483f1ea03fbecee1f7882a4da7df91ae1c41` passed Continuous Integration run `31981258025` / run #300 and Production Runtime Preflight run `31981257926` / run #51.
+
+The exact-head CI run passed all three jobs:
+
+- Frontend lint/build, including the canonical Glaze UI 1.0 conformance contract, TypeScript/Vite production build, editor lazy-loading split, and JavaScript bundle budget.
+- Backend locked-dependency verification, compilation, unit/regression tests, Memos export inspection, provider-neutral migration manifest validation, and synthetic attachment-binary evidence.
+- Full Compose validation covering Alembic round trip through `0007`, readiness, authentication/CSRF, append-only administrative audit behavior, login/trusted-proxy controls, note/revision/lifecycle and organization workflows, indexed search/isolation, private attachment authorization/quota/integrity, CLI/browser native export, destructive native re-import, Memos import/equivalence, migration-provenance portability, destructive PostgreSQL-plus-attachment recovery, diagnostics, and clean teardown.
+
+The Production Runtime Preflight used synthetic production configuration only and does not grant deployment approval.
+
 ## Repository Structure
 
 ```text
