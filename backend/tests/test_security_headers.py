@@ -43,6 +43,7 @@ def test_private_api_responses_are_non_cacheable_and_browser_hardened() -> None:
     assert response.headers["x-frame-options"] == "DENY"
     assert response.headers["referrer-policy"] == "no-referrer"
     assert response.headers["cross-origin-opener-policy"] == "same-origin"
+    assert response.headers["cross-origin-resource-policy"] == "same-origin"
     assert "camera=()" in response.headers["permissions-policy"]
     assert "microphone=()" in response.headers["permissions-policy"]
 
@@ -54,6 +55,7 @@ def test_existing_no_store_contract_is_preserved() -> None:
     assert response.headers["cache-control"] == "no-store"
     assert response.headers["pragma"] == "no-cache"
     assert response.headers["expires"] == "0"
+    assert response.headers["cross-origin-resource-policy"] == "same-origin"
 
 
 def test_liveness_keeps_global_hardening_without_private_api_cache_policy() -> None:
@@ -65,3 +67,4 @@ def test_liveness_keeps_global_hardening_without_private_api_cache_policy() -> N
     assert response.headers["x-content-type-options"] == "nosniff"
     assert response.headers["x-frame-options"] == "DENY"
     assert response.headers["referrer-policy"] == "no-referrer"
+    assert response.headers["cross-origin-resource-policy"] == "same-origin"
