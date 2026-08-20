@@ -1,0 +1,591 @@
+/*
+ * GoreeCloud Notes product mapping for Glaze UI 1.0.0.
+ *
+ * The canonical Glaze token/primitives snapshot is loaded first from ./glaze/.
+ * This file is intentionally loaded last so Notes-specific composition can map the
+ * existing application surfaces to those shared semantics while preserving strong
+ * accessibility and resilience fallbacks across product-specific components.
+ */
+
+:root {
+  --notes-shell-max: 1540px;
+  --notes-sidebar-width: 238px;
+  --notes-list-min: 310px;
+  --notes-list-max: 390px;
+  --notes-editor-min: 420px;
+  --notes-selected-surface: color-mix(in srgb, var(--glaze-accent) 12%, var(--glaze-surface-strong));
+  --notes-accent-surface: color-mix(in srgb, var(--glaze-accent) 10%, var(--glaze-surface-muted));
+  --notes-danger-surface: color-mix(in srgb, var(--glaze-danger) 9%, var(--glaze-surface-muted));
+  --notes-success-surface: color-mix(in srgb, var(--glaze-success) 9%, var(--glaze-surface-muted));
+}
+
+html,
+body,
+#root,
+.notes-root {
+  min-height: 100%;
+}
+
+body {
+  color: var(--glaze-text);
+  background:
+    radial-gradient(circle at 16% -10%, color-mix(in srgb, var(--glaze-accent) 14%, transparent), transparent 32rem),
+    radial-gradient(circle at 86% 4%, color-mix(in srgb, var(--glaze-accent-2) 10%, transparent), transparent 30rem),
+    linear-gradient(180deg, var(--glaze-canvas-accent), var(--glaze-canvas));
+}
+
+/* Glaze surface hierarchy: Canvas -> Glaze shell -> Solid reading panes -> Raised controls. */
+.app-shell,
+.auth-card,
+.account-security-card {
+  border-color: var(--glaze-line);
+  background: var(--glaze-surface);
+  box-shadow: var(--glaze-shadow-raised);
+  -webkit-backdrop-filter: blur(var(--glaze-blur-overlay)) saturate(135%);
+  backdrop-filter: blur(var(--glaze-blur-overlay)) saturate(135%);
+}
+
+.sidebar {
+  border-color: var(--glaze-line);
+  background: color-mix(in srgb, var(--glaze-surface-muted) 90%, transparent);
+}
+
+.note-list-pane,
+.editor-pane {
+  border-color: var(--glaze-line);
+  background: color-mix(in srgb, var(--glaze-surface-strong) 92%, transparent);
+}
+
+.new-note,
+.quick-capture,
+.search-box,
+.note-card,
+.callout,
+.auth-form input,
+.empty-list,
+.note-count,
+.manager-create,
+.manager-row,
+.note-metadata-controls,
+.rich-editor-shell,
+.attachment-panel,
+.attachment-row,
+.account-security-identity,
+.account-security-status,
+.secondary-button,
+.account-security-form input {
+  border-color: var(--glaze-line);
+  background: var(--glaze-surface-muted);
+  color: var(--glaze-text);
+  box-shadow: var(--glaze-shadow-soft);
+}
+
+.new-note,
+.nav-item.active,
+.sidebar-library-item.active,
+.callout strong,
+.tag-chip.assigned,
+.note-card-heading span {
+  color: var(--glaze-accent);
+}
+
+.new-note,
+.nav-item.active,
+.sidebar-library-item.active,
+.tag-chip.assigned {
+  background: var(--notes-accent-surface);
+}
+
+.note-card.selected {
+  border-color: color-mix(in srgb, var(--glaze-accent) 34%, var(--glaze-line));
+  background: var(--notes-selected-surface);
+  box-shadow:
+    0 12px 28px color-mix(in srgb, var(--glaze-accent) 12%, transparent),
+    inset 3px 0 0 var(--glaze-accent);
+}
+
+.brand-mark,
+.editor-actions .save-button,
+.primary-button,
+.manager-edit-actions .primary-button {
+  color: #fff;
+  background: linear-gradient(135deg, var(--glaze-accent), var(--glaze-accent-2));
+  box-shadow: 0 12px 28px color-mix(in srgb, var(--glaze-accent) 24%, transparent);
+}
+
+.status-dot {
+  background: var(--glaze-success);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--glaze-success) 15%, transparent);
+}
+
+.brand-row span,
+.sidebar-footer,
+.account-footer button,
+.eyebrow,
+.crumbs,
+.editor-meta,
+.source-footer,
+.mobile-source-footer,
+.save-state,
+.note-count,
+.note-card p,
+.note-card small,
+.quick-capture,
+.quick-actions,
+.empty-list,
+.empty-editor > p:not(.eyebrow),
+.auth-copy > p:not(.eyebrow),
+.auth-form label,
+.loading-shell,
+.manager-row span,
+.manager-field > span,
+.note-metadata-controls label > span,
+.tag-assignment > span,
+.no-tags,
+.attachment-heading small,
+.attachment-row span,
+.attachment-empty,
+.account-security-intro,
+.account-security-section-heading p,
+.account-security-identity span,
+.field-guidance,
+.rich-editor-loading {
+  color: var(--glaze-muted);
+}
+
+.empty-list strong,
+.attachment-heading span,
+.attachment-row a:not(.attachment-preview),
+.rich-editor-content h1,
+.rich-editor-content h2,
+.rich-editor-content h3 {
+  color: var(--glaze-text);
+}
+
+.editor-surface > p:not(.eyebrow):not(.editor-meta),
+.editor-surface li,
+.body-editor,
+.rich-editor-content,
+.rich-editor-content blockquote {
+  color: color-mix(in srgb, var(--glaze-text) 78%, var(--glaze-muted));
+}
+
+.rich-toolbar,
+.rich-toolbar-select,
+.attachment-preview {
+  border-color: var(--glaze-line);
+  background: color-mix(in srgb, var(--glaze-surface-muted) 86%, transparent);
+}
+
+.rich-toolbar-button,
+.rich-toolbar-select,
+.manager-actions button,
+.manager-edit button,
+.tag-chip,
+.attachment-row button,
+.attachment-upload,
+.secondary-button,
+.account-security-launcher {
+  color: var(--glaze-muted);
+}
+
+.rich-toolbar-button:hover:not(:disabled),
+.rich-toolbar-button.active,
+.rich-toolbar-select:hover:not(:disabled),
+.rich-toolbar-select:focus-visible,
+.manager-actions button:hover:not(:disabled),
+.manager-edit button:hover:not(:disabled),
+.tag-chip:hover:not(:disabled),
+.tag-chip.assigned,
+.attachment-row button:hover:not(:disabled),
+.attachment-upload:hover,
+.secondary-button:hover:not(:disabled),
+.account-security-launcher:hover {
+  border-color: color-mix(in srgb, var(--glaze-accent) 32%, var(--glaze-line));
+  color: var(--glaze-accent);
+  background: var(--notes-accent-surface);
+}
+
+.workspace-error,
+.form-error,
+.account-security-error,
+.account-security-inline-error {
+  border-color: color-mix(in srgb, var(--glaze-danger) 30%, var(--glaze-line));
+  color: var(--glaze-danger);
+}
+
+.workspace-error,
+.form-error {
+  background: var(--notes-danger-surface);
+}
+
+.account-security-export-success {
+  border-color: color-mix(in srgb, var(--glaze-success) 30%, var(--glaze-line));
+  color: var(--glaze-success);
+  background: var(--notes-success-surface);
+}
+
+.save-state.dirty,
+.rich-toolbar-status {
+  color: var(--glaze-warning);
+}
+
+.rich-toolbar-status {
+  border-color: color-mix(in srgb, var(--glaze-warning) 24%, var(--glaze-line));
+  background: color-mix(in srgb, var(--glaze-warning) 10%, var(--glaze-surface-muted));
+}
+
+.rich-editor-content code {
+  background: color-mix(in srgb, var(--glaze-muted) 12%, transparent);
+}
+
+.rich-editor-content pre {
+  background: color-mix(in srgb, var(--glaze-text) 88%, #000);
+  color: var(--glaze-surface-strong);
+}
+
+.rich-editor-content img[data-goree-attachment-image] {
+  border-color: var(--glaze-line);
+  background: var(--glaze-surface-muted);
+  box-shadow: var(--glaze-shadow-soft);
+}
+
+.rich-editor-content img[data-goree-attachment-image].ProseMirror-selectednode {
+  outline-color: color-mix(in srgb, var(--glaze-accent) 58%, transparent);
+}
+
+.title-input::placeholder,
+.body-editor::placeholder {
+  color: color-mix(in srgb, var(--glaze-muted) 72%, transparent);
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+a:focus-visible,
+[contenteditable="true"]:focus-visible {
+  outline: var(--glaze-focus-width) solid color-mix(in srgb, var(--glaze-accent) 58%, transparent);
+  outline-offset: var(--glaze-focus-offset);
+}
+
+.new-note,
+.quick-capture,
+.search-box,
+.note-card,
+.nav-item,
+.sidebar-library-item,
+.editor-actions button,
+.primary-button,
+.secondary-button,
+.account-security-launcher,
+.manager-actions button,
+.manager-edit button,
+.tag-chip,
+.attachment-row button,
+.attachment-upload,
+.rich-toolbar-button,
+.rich-toolbar-select {
+  transition:
+    background-color var(--glaze-motion-fast) var(--glaze-ease-standard),
+    border-color var(--glaze-motion-fast) var(--glaze-ease-standard),
+    color var(--glaze-motion-fast) var(--glaze-ease-standard),
+    box-shadow var(--glaze-motion-standard) var(--glaze-ease-standard),
+    transform var(--glaze-motion-fast) var(--glaze-ease-standard),
+    opacity var(--glaze-motion-fast) var(--glaze-ease-standard);
+}
+
+/* Shared Glaze utility overlay: appearance is local; security keeps drafts isolated in a new tab. */
+.glaze-utility-dock {
+  position: fixed;
+  right: var(--glaze-space-4);
+  bottom: var(--glaze-space-4);
+  z-index: 90;
+  display: flex;
+  align-items: end;
+  gap: var(--glaze-space-2);
+  padding: var(--glaze-space-2);
+  border-radius: var(--glaze-radius-xl);
+}
+
+.appearance-control {
+  display: grid;
+  min-width: 132px;
+  gap: var(--glaze-space-1);
+  color: var(--glaze-muted);
+  font-size: 0.72rem;
+  font-weight: 750;
+}
+
+.appearance-control > span {
+  padding-inline: var(--glaze-space-2);
+}
+
+.appearance-select {
+  min-height: 40px;
+  padding-inline: var(--glaze-space-3);
+  border-radius: var(--glaze-radius-md);
+  font-size: 0.82rem;
+}
+
+.account-security-launcher.glaze-button {
+  position: static;
+  right: auto;
+  bottom: auto;
+  min-height: var(--glaze-target-min);
+  padding-inline: var(--glaze-space-4);
+  border-radius: var(--glaze-radius-control);
+  background: var(--glaze-surface-muted);
+  box-shadow: none;
+  text-decoration: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .note-card:hover {
+    transform: translateY(-1px);
+  }
+}
+
+@media (hover: none), (pointer: coarse) {
+  .note-card:hover {
+    transform: none;
+  }
+
+  button,
+  input,
+  select,
+  .attachment-upload,
+  .account-security-launcher,
+  .rich-toolbar-button,
+  .rich-toolbar-select {
+    min-height: var(--glaze-target-min);
+  }
+}
+
+/* Glaze UI Compact range: through 599px. */
+@media (max-width: 599px) {
+  .glaze-utility-dock {
+    right: var(--glaze-space-3);
+    bottom: var(--glaze-space-3);
+    left: var(--glaze-space-3);
+    align-items: center;
+    justify-content: space-between;
+    border-radius: var(--glaze-radius-lg);
+  }
+
+  .appearance-control {
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+
+  .appearance-select {
+    min-height: var(--glaze-target-min);
+  }
+
+  .account-security-launcher.glaze-button {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+
+  .source-footer,
+  .account-security-page {
+    padding-bottom: 88px;
+  }
+}
+
+/* Glaze UI Medium range: 600px through 1023px. */
+@media (min-width: 600px) and (max-width: 1023px) {
+  .app-shell {
+    width: calc(100vw - 24px);
+    height: calc(100dvh - 24px);
+    margin: 12px;
+  }
+
+  .glaze-utility-dock {
+    right: var(--glaze-space-3);
+    bottom: var(--glaze-space-3);
+  }
+}
+
+/* Glaze UI Expanded range: 1024px through 1439px. */
+@media (min-width: 1024px) and (max-width: 1439px) {
+  .app-shell {
+    width: min(1360px, calc(100vw - 28px));
+    height: calc(100dvh - 28px);
+    margin: 14px auto;
+  }
+}
+
+/* Glaze UI Wide range: 1440px and above. */
+@media (min-width: 1440px) {
+  .app-shell {
+    width: min(var(--notes-shell-max), calc(100vw - 32px));
+  }
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .app-shell,
+  .auth-card,
+  .account-security-card,
+  .sidebar,
+  .note-list-pane,
+  .editor-pane,
+  .new-note,
+  .quick-capture,
+  .search-box,
+  .note-card,
+  .callout,
+  .auth-form input,
+  .empty-list,
+  .manager-create,
+  .manager-row,
+  .note-metadata-controls,
+  .rich-editor-shell,
+  .rich-toolbar,
+  .attachment-panel,
+  .attachment-row,
+  .account-security-identity,
+  .account-security-status,
+  .glaze-utility-dock {
+    background: var(--glaze-surface-strong);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .app-shell,
+  .auth-card,
+  .account-security-card,
+  .sidebar,
+  .note-list-pane,
+  .editor-pane,
+  .new-note,
+  .quick-capture,
+  .search-box,
+  .note-card,
+  .callout,
+  .auth-form input,
+  .empty-list,
+  .manager-create,
+  .manager-row,
+  .note-metadata-controls,
+  .rich-editor-shell,
+  .rich-toolbar,
+  .attachment-panel,
+  .attachment-row,
+  .account-security-identity,
+  .account-security-status,
+  .glaze-utility-dock {
+    background: var(--glaze-surface-strong);
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+}
+
+@media (prefers-contrast: more) {
+  .app-shell,
+  .auth-card,
+  .account-security-card,
+  .sidebar,
+  .note-list-pane,
+  .editor-pane,
+  .new-note,
+  .quick-capture,
+  .search-box,
+  .note-card,
+  .callout,
+  .auth-form input,
+  .empty-list,
+  .manager-create,
+  .manager-row,
+  .note-metadata-controls,
+  .rich-editor-shell,
+  .attachment-panel,
+  .attachment-row,
+  .account-security-identity,
+  .account-security-status,
+  .glaze-utility-dock {
+    border-width: 2px;
+    background: var(--glaze-surface-strong);
+  }
+}
+
+@media (forced-colors: active) {
+  .app-shell,
+  .auth-card,
+  .account-security-card,
+  .sidebar,
+  .note-list-pane,
+  .editor-pane,
+  .new-note,
+  .quick-capture,
+  .search-box,
+  .note-card,
+  .callout,
+  .auth-form input,
+  .empty-list,
+  .manager-create,
+  .manager-row,
+  .note-metadata-controls,
+  .rich-editor-shell,
+  .rich-toolbar,
+  .attachment-panel,
+  .attachment-row,
+  .attachment-preview,
+  .account-security-identity,
+  .account-security-status,
+  .glaze-utility-dock {
+    background: Canvas;
+    color: CanvasText;
+    border-color: CanvasText;
+    box-shadow: none;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  .nav-item.active,
+  .sidebar-library-item.active,
+  .note-card.selected,
+  .tag-chip.assigned {
+    outline: 2px solid Highlight;
+    outline-offset: -2px;
+  }
+
+  .brand-mark,
+  .editor-actions .save-button,
+  .primary-button,
+  .manager-edit-actions .primary-button {
+    background: Highlight;
+    color: HighlightText;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .new-note,
+  .quick-capture,
+  .search-box,
+  .note-card,
+  .nav-item,
+  .sidebar-library-item,
+  .editor-actions button,
+  .primary-button,
+  .secondary-button,
+  .account-security-launcher,
+  .manager-actions button,
+  .manager-edit button,
+  .tag-chip,
+  .attachment-row button,
+  .attachment-upload,
+  .rich-toolbar-button,
+  .rich-toolbar-select {
+    transition: none;
+  }
+
+  .note-card:hover,
+  .glaze-button:active:not(:disabled) {
+    transform: none;
+  }
+}

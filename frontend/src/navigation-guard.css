@@ -1,0 +1,175 @@
+.navigation-guard-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: grid;
+  place-items: center;
+  padding: var(--glaze-space-6);
+  background: color-mix(in srgb, var(--glaze-canvas) 62%, transparent);
+  -webkit-backdrop-filter: blur(12px) saturate(120%);
+  backdrop-filter: blur(12px) saturate(120%);
+  animation: navigation-guard-enter var(--glaze-motion-emphasized) var(--glaze-ease-emphasized);
+}
+
+.navigation-guard-dialog {
+  width: min(560px, 100%);
+  max-height: min(720px, calc(100vh - (2 * var(--glaze-space-6))));
+  overflow: auto;
+  padding: clamp(var(--glaze-space-5), 4vw, var(--glaze-space-8));
+  border-radius: var(--glaze-radius-2xl);
+  color: var(--glaze-text);
+}
+
+.navigation-guard-heading {
+  display: grid;
+  gap: var(--glaze-space-2);
+  margin-bottom: var(--glaze-space-4);
+}
+
+.navigation-guard-heading .eyebrow,
+.navigation-guard-heading h2,
+.navigation-guard-dialog p {
+  margin: 0;
+}
+
+.navigation-guard-heading h2 {
+  font-size: clamp(1.35rem, 2vw, 1.75rem);
+  line-height: 1.2;
+}
+
+.navigation-guard-dialog > p {
+  color: var(--glaze-muted);
+  line-height: 1.6;
+}
+
+.navigation-guard-warning,
+.navigation-guard-status {
+  margin-top: var(--glaze-space-4) !important;
+  padding: var(--glaze-space-3) var(--glaze-space-4);
+  border: 1px solid var(--glaze-line);
+  border-radius: var(--glaze-radius-md);
+  background: var(--glaze-surface-muted);
+}
+
+.navigation-guard-warning {
+  color: var(--glaze-warning) !important;
+  border-color: color-mix(in srgb, var(--glaze-warning) 34%, var(--glaze-line));
+}
+
+.navigation-guard-status {
+  color: var(--glaze-text) !important;
+}
+
+.navigation-guard-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: var(--glaze-space-3);
+  margin-top: var(--glaze-space-6);
+}
+
+.navigation-guard-actions .glaze-button {
+  min-height: var(--glaze-target-min);
+}
+
+.navigation-guard-actions .glaze-button:focus-visible {
+  outline: var(--glaze-focus-width) solid color-mix(in srgb, var(--glaze-accent) 58%, transparent);
+  outline-offset: var(--glaze-focus-offset);
+}
+
+@keyframes navigation-guard-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(.99);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (max-width: 599px) {
+  .navigation-guard-backdrop {
+    place-items: end center;
+    padding: 0;
+  }
+
+  .navigation-guard-dialog {
+    width: 100%;
+    max-height: min(82vh, 720px);
+    border-right: 0;
+    border-bottom: 0;
+    border-left: 0;
+    border-radius: var(--glaze-radius-2xl) var(--glaze-radius-2xl) 0 0;
+    padding: var(--glaze-space-6) var(--glaze-space-4) max(var(--glaze-space-6), env(safe-area-inset-bottom));
+  }
+
+  .navigation-guard-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .navigation-guard-actions .glaze-button {
+    min-height: var(--glaze-target-comfortable);
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .navigation-guard-backdrop {
+    animation: none;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .navigation-guard-backdrop {
+    background: var(--glaze-canvas);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  .navigation-guard-dialog {
+    background: var(--glaze-surface-strong);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .navigation-guard-backdrop {
+    background: color-mix(in srgb, var(--glaze-canvas) 94%, black 6%);
+  }
+
+  .navigation-guard-dialog {
+    background: var(--glaze-surface-strong);
+  }
+}
+
+@media (prefers-contrast: more) {
+  .navigation-guard-dialog,
+  .navigation-guard-warning,
+  .navigation-guard-status {
+    border-width: 2px;
+  }
+}
+
+@media (forced-colors: active) {
+  .navigation-guard-backdrop {
+    background: Canvas;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  .navigation-guard-dialog,
+  .navigation-guard-warning,
+  .navigation-guard-status {
+    background: Canvas;
+    color: CanvasText !important;
+    border: 2px solid CanvasText;
+    box-shadow: none;
+  }
+
+  .navigation-guard-actions .glaze-button:focus-visible {
+    outline: 3px solid Highlight;
+  }
+}

@@ -1,1 +1,53 @@
-# Placeholder; native foundation work continues on feature/native-foundation.
+# Environment and secrets
+.env
+.env.*
+!.env.example
+secrets/
+*.pem
+*.key
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+coverage.xml
+.coverage
+htmlcov/
+
+# Node / frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Local databases and application data
+*.sqlite3
+*.db
+attachments/
+data/
+
+# Editors / operating systems
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Test / browser artifacts
+playwright-report/
+test-results/
+coverage/
+
+# Docker / temporary files
+*.pid
+*.log
+.tmp/
+tmp/

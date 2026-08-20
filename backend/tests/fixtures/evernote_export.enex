@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE en-export SYSTEM "http://xml.evernote.com/pub/evernote-export3.dtd">
+<en-export export-date="20260815T050000Z" application="Evernote/10.0" version="10.0">
+  <note>
+    <title>Migration Fixture</title>
+    <content><![CDATA[<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE en-note SYSTEM "http://xml.evernote.com/pub/enml2.dtd"><en-note>Hello<div>World</div></en-note>]]></content>
+    <created>20260814T120000Z</created>
+    <updated>20260815T040000Z</updated>
+    <tag>research</tag>
+    <tag>goreecloud</tag>
+    <resource>
+      <data encoding="base64" hash="5d41402abc4b2a76b9719d911017c592">aGVsbG8=</data>
+      <mime>text/plain</mime>
+      <resource-attributes><file-name>hello.txt</file-name></resource-attributes>
+    </resource>
+  </note>
+  <note>
+    <title>Deleted Fixture</title>
+    <content><![CDATA[<en-note>Deleted note</en-note>]]></content>
+    <created>20260813T120000Z</created>
+    <updated>20260814T120000Z</updated>
+    <deleted>20260815T010000Z</deleted>
+    <tag>research</tag>
+  </note>
+</en-export>
