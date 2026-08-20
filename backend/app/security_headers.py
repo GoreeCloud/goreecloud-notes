@@ -12,6 +12,7 @@ _API_CONTENT_SECURITY_POLICY = (
 
 _GLOBAL_SECURITY_HEADERS = {
     "Cross-Origin-Opener-Policy": "same-origin",
+    "Cross-Origin-Resource-Policy": "same-origin",
     "Permissions-Policy": (
         "accelerometer=(), autoplay=(), camera=(), geolocation=(), gyroscope=(), "
         "magnetometer=(), microphone=(), payment=(), usb=()"
@@ -29,9 +30,11 @@ class PrivateResponseHeadersMiddleware(BaseHTTPMiddleware):
     note content, account state, search results, attachment metadata, or export data,
     so the API path is always treated as non-cacheable even when an individual route
     forgets to set a cache policy. Existing route-level ``no-store`` contracts are
-    preserved rather than normalized to a different header value. Frontend document
-    CSP/HSTS remain publication-layer responsibilities because the final static-serving
-    and Caddy topology are separate production gates.
+    preserved rather than normalized to a different header value. Cross-origin
+    resource isolation is applied globally so browser-managed subresources cannot be
+    embedded by unrelated origins. Frontend document CSP/HSTS remain publication-layer
+    responsibilities because the final static-serving and Caddy topology are separate
+    production gates.
     """
 
     def __init__(self, app, *, api_prefix: str) -> None:  # type: ignore[no-untyped-def]
