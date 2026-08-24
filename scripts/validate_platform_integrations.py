@@ -13,6 +13,8 @@ def main() -> None:
     data = json.loads(MANIFEST.read_text(encoding="utf-8"))
     if data.get("schema") != "goreecloud.platform-integrations/v1":
         raise SystemExit("unsupported platform integration schema")
+    if data.get("application") != "GoreeCloud Notes":
+        raise SystemExit("platform contract must identify GoreeCloud Notes")
     if data.get("implementation") != "native":
         raise SystemExit("Notes must remain an original native implementation")
 
@@ -26,24 +28,25 @@ def main() -> None:
 
     for name in sorted(REQUIRED):
         entry = systems[name]
+        if not isinstance(entry, dict):
+            raise SystemExit(f"{name} must be an object")
         if entry.get("required") is not True:
             raise SystemExit(f"{name} must remain required")
         if entry.get("status") not in ALLOWED_STATUS:
             raise SystemExit(f"{name} has invalid status")
         evidence = entry.get("evidence")
-        if not isinstance(evidence, list) or not evidence:
-            raise SystemExit(f"{name} must record evidence")
+        if not isinstance(evidence, list) or not evidence or not all(isinstance(item, str) and item.strip() for item in evidence):
+            raise SystemExit(f"{name} must record non-empty evidence")
+
+    gates = data.get("openAcceptanceGates")
+    if not isinstance(gates, list):
+        raise SystemExit("openAcceptanceGates must be a list")
 
     if not data.get("stableQualificationBlocked"):
-        nonaccepted = [
-            name for name in sorted(REQUIRED) if systems[name]["status"] != "accepted"
-        ]
+        nonaccepted = [name for name in sorted(REQUIRED) if systems[name]["status"] != "accepted"]
         if nonaccepted:
-            raise SystemExit(
-                "Stable qualification may be unblocked only after acceptance: "
-                + ", ".join(nonaccepted)
-            )
-        if data.get("openAcceptanceGates"):
+            raise SystemExit("Stable qualification may be unblocked only after acceptance: " + ", ".join(nonaccepted))
+        if gates:
             raise SystemExit("Stable qualification cannot be unblocked with open acceptance gates")
 
 
