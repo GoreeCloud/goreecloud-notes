@@ -1,0 +1,29 @@
+name: Platform System Contracts
+
+on:
+  pull_request:
+    paths:
+      - "platform/**"
+      - "scripts/validate_platform_integrations.py"
+      - ".github/workflows/platform-system-contracts.yml"
+  push:
+    branches:
+      - "feature/platform-system-contracts"
+    paths:
+      - "platform/**"
+      - "scripts/validate_platform_integrations.py"
+      - ".github/workflows/platform-system-contracts.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Validate mandatory platform systems
+        run: python scripts/validate_platform_integrations.py
