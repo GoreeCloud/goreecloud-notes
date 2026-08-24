@@ -1,0 +1,56 @@
+{
+  "schema": "goreecloud.platform-integrations/v1",
+  "application": "GoreeCloud Notes",
+  "implementation": "native",
+  "stableQualificationBlocked": true,
+  "systems": {
+    "glazeUI": {
+      "required": true,
+      "status": "validated",
+      "contract": "current-stable",
+      "evidence": [
+        "vendored local Glaze UI web foundation",
+        "adaptive and accessibility validation",
+        "local-only conformance checks"
+      ]
+    },
+    "wardveilSecurity": {
+      "required": true,
+      "status": "validated",
+      "evidence": [
+        "opaque sessions and CSRF protection",
+        "bounded login-abuse controls",
+        "append-only privileged account audit boundary",
+        "owner-scoped authorization",
+        "fail-closed production configuration"
+      ]
+    },
+    "privacyShield": {
+      "required": true,
+      "status": "validated",
+      "evidence": [
+        "owner-isolated notes, search, attachments, and relationships",
+        "no required telemetry",
+        "private API response hardening",
+        "portable owner-authenticated export"
+      ]
+    },
+    "everkeep": {
+      "required": true,
+      "status": "validated",
+      "evidence": [
+        "immutable revisions and conflict-safe restore",
+        "portable full-library export and native re-import",
+        "destructive disposable PostgreSQL plus attachment restore validation",
+        "protected migration source boundary"
+      ]
+    }
+  },
+  "openAcceptanceGates": [
+    "production recovery evidence and measured RTO/RPO",
+    "production publication and monitoring acceptance",
+    "real-device Glaze UI and navigation acceptance",
+    "protected-copy migration rehearsal"
+  ],
+  "releaseBoundary": "Validated source integration does not authorize production deployment or Stable qualification."
+}
