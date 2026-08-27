@@ -1,0 +1,29 @@
+name: Browser Capture Contract
+
+on:
+  pull_request:
+    paths:
+      - "platform/browser_capture.json"
+      - "scripts/validate_browser_capture_contract.py"
+      - ".github/workflows/browser-capture-contract.yml"
+  push:
+    branches:
+      - "agent/browser-capture-contract"
+    paths:
+      - "platform/browser_capture.json"
+      - "scripts/validate_browser_capture_contract.py"
+      - ".github/workflows/browser-capture-contract.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Validate fail-closed Browser capture boundary
+        run: python scripts/validate_browser_capture_contract.py
