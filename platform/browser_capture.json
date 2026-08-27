@@ -1,0 +1,27 @@
+{
+  "schema": "goreecloud.browser-capture/v1",
+  "service": "GoreeCloud Notes",
+  "destination": "https://notes.goreecloud.com",
+  "acceptedKinds": ["page", "link", "selection"],
+  "requirements": {
+    "authenticated": true,
+    "reviewedAdapter": true,
+    "oneTimeIntent": true,
+    "privateBrowsingExportAllowed": false,
+    "capturedContentInURLAllowed": false,
+    "leastPrivilege": true,
+    "ownerScopedWrite": true
+  },
+  "implementation": {
+    "serviceWriteEndpointReady": false,
+    "browserAdapterReady": false,
+    "productionApproved": false
+  },
+  "openGates": [
+    "define and review authenticated capture endpoint",
+    "bind capture writes to authenticated owner scope",
+    "validate payload limits and failure behavior",
+    "complete Privacy Shield and Wardveil review",
+    "complete exact-build Browser and Notes compatibility acceptance"
+  ]
+}
