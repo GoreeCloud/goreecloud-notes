@@ -5,6 +5,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 CONTRACT = ROOT / "platform" / "browser_capture.json"
+DRAFT_BUILDER = ROOT / "backend" / "app" / "browser_capture.py"
+DRAFT_TESTS = ROOT / "backend" / "tests" / "test_browser_capture.py"
 ALLOWED_KINDS = {"page", "link", "selection"}
 
 
@@ -34,9 +36,15 @@ def main() -> None:
     implementation = data.get("implementation")
     if not isinstance(implementation, dict):
         raise SystemExit("implementation must be an object")
+    draft_ready = implementation.get("captureDraftBuilderReady") is True
     endpoint_ready = implementation.get("serviceWriteEndpointReady") is True
     adapter_ready = implementation.get("browserAdapterReady") is True
     production = implementation.get("productionApproved") is True
+    if draft_ready and (not DRAFT_BUILDER.is_file() or not DRAFT_TESTS.is_file()):
+        raise SystemExit("capture draft readiness requires source and test evidence")
+    if endpoint_ready and not draft_ready:
+        raise SystemExit("service endpoint cannot be ready before the capture draft builder")
+
     gates = data.get("openGates")
     if not isinstance(gates, list):
         raise SystemExit("openGates must be a list")

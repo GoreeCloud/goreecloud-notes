@@ -13,14 +13,15 @@
     "ownerScopedWrite": true
   },
   "implementation": {
+    "captureDraftBuilderReady": true,
     "serviceWriteEndpointReady": false,
     "browserAdapterReady": false,
     "productionApproved": false
   },
   "openGates": [
-    "define and review authenticated capture endpoint",
-    "bind capture writes to authenticated owner scope",
-    "validate payload limits and failure behavior",
+    "implement replay-safe one-time capture intent persistence",
+    "define and review authenticated owner-scoped capture write endpoint",
+    "complete endpoint failure and abuse-limit validation",
     "complete Privacy Shield and Wardveil review",
     "complete exact-build Browser and Notes compatibility acceptance"
   ]
