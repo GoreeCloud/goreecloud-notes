@@ -1,0 +1,75 @@
+{
+  "format": "goreecloud-notes",
+  "schemaVersion": 1,
+  "exportedAt": "2026-08-14T15:00:00.000Z",
+  "source": {
+    "application": "GoreeCloud Notes",
+    "upstream": "Memos"
+  },
+  "scope": {
+    "includes": ["top-level notes", "note metadata", "labels", "attachment metadata", "relations"],
+    "excludes": ["attachment binary content", "comments", "reactions"]
+  },
+  "notes": [
+    {
+      "name": "memos/100",
+      "uid": "100",
+      "title": "Migration fixture",
+      "markdown": "# Migration fixture\n\nNative migration inventory.",
+      "state": "normal",
+      "restoreTarget": null,
+      "visibility": "PRIVATE",
+      "pinned": true,
+      "color": "blue",
+      "tags": ["GoreeCloud", "migration"],
+      "createTime": "2026-08-14T14:00:00.000Z",
+      "updateTime": "2026-08-14T14:30:00.000Z",
+      "location": null,
+      "attachments": [
+        {
+          "name": "attachments/200",
+          "filename": "fixture.png",
+          "externalLink": null,
+          "mimeType": "image/png",
+          "sizeBytes": "68",
+          "createTime": "2026-08-14T14:05:00.000Z",
+          "memo": "memos/100",
+          "motionMedia": null,
+          "mediaMetadata": {
+            "width": 1,
+            "height": 1,
+            "details": null
+          }
+        }
+      ],
+      "relations": [
+        {
+          "memo": "memos/100",
+          "relatedMemo": "memos/101",
+          "type": "REFERENCE"
+        }
+      ]
+    },
+    {
+      "name": "memos/101",
+      "uid": "101",
+      "title": null,
+      "markdown": "Archived fixture",
+      "state": "trash",
+      "restoreTarget": "archived",
+      "visibility": "PRIVATE",
+      "pinned": false,
+      "color": null,
+      "tags": ["migration"],
+      "createTime": "2026-08-14T14:10:00.000Z",
+      "updateTime": "2026-08-14T14:40:00.000Z",
+      "location": {
+        "placeholder": "",
+        "latitude": 0,
+        "longitude": 0
+      },
+      "attachments": [],
+      "relations": []
+    }
+  ]
+}

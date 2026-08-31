@@ -1,0 +1,80 @@
+# GoreeCloud Notes development Compose stack.
+# Production publication, storage, backup, and restoration require separate validation.
+
+name: goreecloud-notes
+
+services:
+  db:
+    image: postgres:17.10-bookworm@sha256:4f736ae292687621d4dbe0d499ffd024a36bd2ee7d8ca6f2ccd4c800f047b394
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ:-America/Chicago}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    secrets:
+      - postgres_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - backend
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"'
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - .env
+    secrets:
+      - postgres_password
+    # File-backed Compose secrets retain the source file's numeric group.
+    # Grant the non-root API process only that supplementary group.
+    group_add:
+      - "${APP_SECRET_GID:-20001}"
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${API_PORT:-8000}:8000"
+    volumes:
+      - attachment_data:/var/lib/goreecloud-notes/attachments
+    networks:
+      - backend
+      - edge
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ready', timeout=3)"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+secrets:
+  postgres_password:
+    file: ${POSTGRES_PASSWORD_SOURCE}
+
+volumes:
+  postgres_data:
+  attachment_data:
+
+networks:
+  backend:
+    internal: true
+  edge:
+    driver: bridge

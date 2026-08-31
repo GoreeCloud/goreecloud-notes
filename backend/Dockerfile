@@ -1,0 +1,41 @@
+# GoreeCloud Notes API development image.
+# Production image publication requires separate validation and approval.
+FROM python:3.13.14-slim-bookworm@sha256:9d7f287598e1a5a978c015ee176d8216435aaf335ed69ac3c38dd1bbb10e8d64
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
+
+WORKDIR /app
+
+COPY pyproject.toml requirements.lock ./
+COPY app ./app
+COPY migrations ./migrations
+COPY alembic.ini ./
+
+# requirements.lock constrains the full runtime dependency graph. The project metadata
+# remains the declaration of direct requirements; image builds must satisfy both.
+RUN python -m pip install --constraint requirements.lock . \
+    && python -m pip check
+
+RUN useradd \
+    --create-home \
+    --uid 10001 \
+    --shell /usr/sbin/nologin \
+    goreecloud
+
+RUN mkdir -p /var/lib/goreecloud-notes/attachments \
+    && chown -R goreecloud:goreecloud /app /var/lib/goreecloud-notes
+USER goreecloud
+
+EXPOSE 8000
+
+# Container health uses readiness rather than liveness so an API process with an
+# unavailable PostgreSQL database or attachment store is not advertised as healthy.
+# /health remains dependency-free for process-level monitoring and diagnosis.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+    CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ready', timeout=3)"]
+
+# Suppress the default Uvicorn Server header so the private API does not advertise
+# unnecessary implementation/version fingerprinting to clients or reverse proxies.
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--no-server-header"]

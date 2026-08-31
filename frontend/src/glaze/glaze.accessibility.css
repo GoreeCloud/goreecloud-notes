@@ -1,0 +1,97 @@
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .glaze-surface,
+  .glaze-overlay {
+    background: var(--glaze-surface-strong);
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .glaze-surface,
+  .glaze-overlay {
+    background: var(--glaze-surface-strong);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+
+  .glaze-button:active:not(:disabled),
+  .glaze-icon-button:active:not(:disabled) {
+    transform: none;
+  }
+}
+
+@media (prefers-contrast: more) {
+  :root {
+    --glaze-line: color-mix(in srgb, currentColor 34%, transparent);
+    --glaze-surface: var(--glaze-surface-strong);
+  }
+
+  .glaze-surface,
+  .glaze-surface-raised,
+  .glaze-surface-solid,
+  .glaze-overlay,
+  .glaze-button,
+  .glaze-input,
+  .glaze-select,
+  .glaze-icon-button {
+    border-width: 2px;
+  }
+}
+
+@media (forced-colors: active) {
+  .glaze-canvas,
+  .glaze-surface,
+  .glaze-surface-raised,
+  .glaze-surface-solid,
+  .glaze-overlay,
+  .glaze-button,
+  .glaze-input,
+  .glaze-select,
+  .glaze-icon-button,
+  .glaze-chip {
+    background: Canvas;
+    color: CanvasText;
+    border-color: ButtonText;
+    box-shadow: none;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  .glaze-button[data-variant="primary"] {
+    background: Highlight;
+    color: HighlightText;
+  }
+
+  .glaze-button[data-variant="danger"] {
+    color: CanvasText;
+    border-style: double;
+  }
+
+  .glaze-button:focus-visible,
+  .glaze-icon-button:focus-visible,
+  .glaze-input:focus-visible,
+  .glaze-select:focus-visible,
+  .glaze-focusable:focus-visible {
+    outline: 3px solid Highlight;
+  }
+}
+
+.glaze-sr-only {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0,0,0,0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}

@@ -1,0 +1,103 @@
+name: Production Runtime Preflight
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-preflight-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  production-preflight:
+    name: Production configuration boundary
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: |
+            backend/pyproject.toml
+            backend/requirements.lock
+
+      - name: Install locked backend dependencies
+        run: |
+          python -m pip install --constraint requirements.lock -e ".[test]"
+          python -m pip check
+
+      - name: Prepare synthetic production-only paths
+        run: |
+          mkdir -p /tmp/goreecloud-notes-production-attachments
+          printf '%s\n' 'synthetic-production-preflight-secret' > /tmp/goreecloud-notes-production-db-secret
+          chmod 750 /tmp/goreecloud-notes-production-attachments
+          chmod 640 /tmp/goreecloud-notes-production-db-secret
+
+      - name: Validate explicit production configuration boundary
+        env:
+          GOREECLOUD_NOTES_ENVIRONMENT: production
+          GOREECLOUD_NOTES_ALLOWED_ORIGINS: https://notes.example.invalid
+          GOREECLOUD_NOTES_TRUSTED_PROXY_CIDRS: 10.20.30.0/24
+          GOREECLOUD_NOTES_ATTACHMENT_ROOT: /tmp/goreecloud-notes-production-attachments
+          GOREECLOUD_NOTES_ATTACHMENT_USER_QUOTA_BYTES: 104857600
+          GOREECLOUD_NOTES_DATABASE_PASSWORD_FILE: /tmp/goreecloud-notes-production-db-secret
+        run: |
+          python -m app.production_check --json > /tmp/goreecloud-notes-production-preflight.json
+          python - <<'PY'
+          import json
+
+          with open('/tmp/goreecloud-notes-production-preflight.json', encoding='utf-8') as source:
+              report = json.load(source)
+
+          assert report['format'] == 'goreecloud-notes-production-preflight'
+          assert report['schemaVersion'] == 1
+          assert report['status'] == 'pass'
+          assert all(report['checks'].values())
+          assert report['checks']['attachmentUserQuotaConfigured'] is True
+          assert report['nonDestructive'] is True
+          assert report['liveDependencyValidationPerformed'] is False
+          assert report['productionApprovalGranted'] is False
+          PY
+
+      - name: Prove unsafe production defaults fail closed
+        env:
+          GOREECLOUD_NOTES_ENVIRONMENT: production
+          GOREECLOUD_NOTES_ALLOWED_ORIGINS: http://localhost:5173
+          GOREECLOUD_NOTES_TRUSTED_PROXY_CIDRS: ""
+          GOREECLOUD_NOTES_ATTACHMENT_ROOT: ./data/attachments
+          GOREECLOUD_NOTES_ATTACHMENT_USER_QUOTA_BYTES: 0
+          GOREECLOUD_NOTES_DATABASE_PASSWORD_FILE: ""
+        run: |
+          set +e
+          python -m app.production_check --json > /tmp/goreecloud-notes-production-preflight-failure.json
+          preflight_status=$?
+          set -e
+
+          test "$preflight_status" -ne 0
+          python - <<'PY'
+          import json
+
+          with open('/tmp/goreecloud-notes-production-preflight-failure.json', encoding='utf-8') as source:
+              report = json.load(source)
+
+          assert report['status'] == 'fail'
+          assert report['configurationErrors']
+          assert any('attachment user quota' in message for message in report['configurationErrors'])
+          assert report['nonDestructive'] is True
+          assert report['liveDependencyValidationPerformed'] is False
+          assert report['productionApprovalGranted'] is False
+          PY

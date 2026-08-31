@@ -1,0 +1,33 @@
+/*
+ * Compatibility bridge for legacy product styles that still contain
+ * prefers-color-scheme declarations. This file loads after those styles and
+ * before the final Glaze product mapping so an explicit System/Light/Dark
+ * preference remains authoritative across every standalone Notes surface.
+ */
+
+.account-security-page {
+  color: var(--glaze-text);
+  background:
+    radial-gradient(circle at 16% -10%, color-mix(in srgb, var(--glaze-accent) 14%, transparent), transparent 32rem),
+    radial-gradient(circle at 86% 4%, color-mix(in srgb, var(--glaze-accent-2) 10%, transparent), transparent 30rem),
+    linear-gradient(180deg, var(--glaze-canvas-accent), var(--glaze-canvas));
+}
+
+.sidebar-library-item {
+  color: var(--glaze-muted);
+}
+
+.manager-create input,
+.manager-create select,
+.manager-edit input,
+.manager-edit select,
+.note-metadata-controls select {
+  border-color: var(--glaze-line);
+  color: var(--glaze-text);
+  background: var(--glaze-surface-muted);
+}
+
+:root[data-theme="light"] .account-security-page,
+:root[data-theme="dark"] .account-security-page {
+  color: var(--glaze-text);
+}

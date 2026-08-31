@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools==80.10.2"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "goreecloud-notes-backend"
+version = "0.1.0"
+description = "Native API backend for GoreeCloud Notes"
+requires-python = ">=3.13,<3.14"
+dependencies = [
+  "fastapi==0.139.2",
+  "uvicorn[standard]==0.52.3",
+  "pydantic-settings>=2.10,<3.0",
+  "sqlalchemy>=2.0,<2.1",
+  "alembic>=1.16,<2.0",
+  "psycopg[binary]>=3.2,<4.0",
+]
+
+[project.optional-dependencies]
+test = [
+  "pytest>=8.0,<9.0",
+  "httpx>=0.28,<0.29",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*"]
+exclude = ["migrations*", "tests*"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+addopts = "-q"
