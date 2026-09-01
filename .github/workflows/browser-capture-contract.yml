@@ -4,6 +4,10 @@ on:
   pull_request:
     paths:
       - "platform/browser_capture.json"
+      - "backend/app/browser_capture.py"
+      - "backend/tests/test_browser_capture.py"
+      - "backend/app/browser_capture_intents.py"
+      - "backend/tests/test_browser_capture_intents.py"
       - "scripts/validate_browser_capture_contract.py"
       - ".github/workflows/browser-capture-contract.yml"
   push:
@@ -11,6 +15,10 @@ on:
       - "agent/browser-capture-contract"
     paths:
       - "platform/browser_capture.json"
+      - "backend/app/browser_capture.py"
+      - "backend/tests/test_browser_capture.py"
+      - "backend/app/browser_capture_intents.py"
+      - "backend/tests/test_browser_capture_intents.py"
       - "scripts/validate_browser_capture_contract.py"
       - ".github/workflows/browser-capture-contract.yml"
 

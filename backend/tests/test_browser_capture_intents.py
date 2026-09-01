@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from app.browser_capture_intents import (
+    MAX_PRESENTED_TOKEN_CHARS,
     BrowserCaptureIntentGuard,
     BrowserCaptureIntentRejected,
 )
@@ -39,6 +40,24 @@ def test_expired_and_unknown_intents_share_rejection_boundary():
         guard.consume("owner-a", intent.token, now=NOW + timedelta(seconds=5))
     with pytest.raises(BrowserCaptureIntentRejected, match="capture intent rejected"):
         guard.consume("owner-a", "unknown-token", now=NOW + timedelta(seconds=5))
+
+
+def test_oversized_token_is_rejected_before_hashing_without_consuming_valid_intent():
+    guard = BrowserCaptureIntentGuard()
+    intent = guard.issue("owner-a", now=NOW)
+    oversized = "x" * (MAX_PRESENTED_TOKEN_CHARS + 1)
+
+    with pytest.raises(BrowserCaptureIntentRejected, match="capture intent rejected"):
+        guard.consume("owner-a", oversized, now=NOW + timedelta(seconds=1))
+
+    guard.consume("owner-a", intent.token, now=NOW + timedelta(seconds=2))
+
+
+def test_issued_token_fits_reviewed_presentation_bound():
+    guard = BrowserCaptureIntentGuard()
+    intent = guard.issue("owner-a", now=NOW)
+
+    assert 0 < len(intent.token) <= MAX_PRESENTED_TOKEN_CHARS
 
 
 def test_guard_is_bounded_and_prunes_expired_intents():
