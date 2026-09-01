@@ -14,12 +14,13 @@
   },
   "implementation": {
     "captureDraftBuilderReady": true,
+    "captureIntentReplayGuardReady": true,
     "serviceWriteEndpointReady": false,
     "browserAdapterReady": false,
     "productionApproved": false
   },
   "openGates": [
-    "implement replay-safe one-time capture intent persistence",
+    "select and validate production one-time capture intent persistence or coordination for the deployed topology",
     "define and review authenticated owner-scoped capture write endpoint",
     "complete endpoint failure and abuse-limit validation",
     "complete Privacy Shield and Wardveil review",
