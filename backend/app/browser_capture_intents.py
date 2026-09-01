@@ -48,9 +48,9 @@ def _token_digest(token: str) -> str:
 class BrowserCaptureIntentGuard:
     """Bounded, process-local one-time intent guard.
 
-    Only owner ID, opaque-token digest, and expiry are retained. Consumed intents are removed
-    immediately, making replay, cross-owner reuse, expiry, and unknown tokens indistinguishable
-    through one rejection boundary.
+    Only owner ID, opaque-token digest, and expiry are retained. Successful consumption removes the
+    intent immediately. Replay, cross-owner reuse, expiry, and unknown tokens share one rejection
+    boundary; a cross-owner attempt cannot consume the rightful owner's still-valid intent.
     """
 
     def __init__(self, *, max_active: int = MAX_ACTIVE_INTENTS) -> None:
@@ -97,11 +97,11 @@ class BrowserCaptureIntentGuard:
 
         digest = _token_digest(token)
         with self._lock:
-            stored = self._intents.pop(digest, None)
             self._prune_locked(checked_at)
-
-        if stored is None or stored.owner_id != owner_id or stored.expires_at <= checked_at:
-            raise BrowserCaptureIntentRejected("capture intent rejected")
+            stored = self._intents.get(digest)
+            if stored is None or stored.owner_id != owner_id or stored.expires_at <= checked_at:
+                raise BrowserCaptureIntentRejected("capture intent rejected")
+            self._intents.pop(digest, None)
 
     def _prune_locked(self, now: datetime) -> None:
         expired = [digest for digest, stored in self._intents.items() if stored.expires_at <= now]
