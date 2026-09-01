@@ -17,10 +17,11 @@ DEFAULT_INTENT_TTL = timedelta(minutes=5)
 MAX_INTENT_TTL = timedelta(minutes=15)
 MAX_ACTIVE_INTENTS = 4096
 TOKEN_BYTES = 32
+MAX_PRESENTED_TOKEN_CHARS = 128
 
 
 class BrowserCaptureIntentRejected(ValueError):
-    """Raised for expired, replayed, unknown, or cross-owner capture intents."""
+    """Raised for expired, replayed, unknown, malformed, or cross-owner capture intents."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,8 +50,8 @@ class BrowserCaptureIntentGuard:
     """Bounded, process-local one-time intent guard.
 
     Only owner ID, opaque-token digest, and expiry are retained. Successful consumption removes the
-    intent immediately. Replay, cross-owner reuse, expiry, and unknown tokens share one rejection
-    boundary; a cross-owner attempt cannot consume the rightful owner's still-valid intent.
+    intent immediately. Replay, malformed input, cross-owner reuse, expiry, and unknown tokens share
+    one rejection boundary; a rejected attempt cannot consume the rightful owner's still-valid intent.
     """
 
     def __init__(self, *, max_active: int = MAX_ACTIVE_INTENTS) -> None:
@@ -92,7 +93,7 @@ class BrowserCaptureIntentGuard:
         owner_id = owner_id.strip()
         token = token.strip()
         checked_at = _aware_utc(now)
-        if not owner_id or not token:
+        if not owner_id or not token or len(token) > MAX_PRESENTED_TOKEN_CHARS:
             raise BrowserCaptureIntentRejected("capture intent rejected")
 
         digest = _token_digest(token)
