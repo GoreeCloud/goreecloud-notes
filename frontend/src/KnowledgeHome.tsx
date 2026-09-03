@@ -58,8 +58,9 @@ function normalizePreferences(value: unknown): HomeModulePreference[] {
   for (const entry of value) {
     if (typeof entry !== "object" || entry === null) continue;
     const raw = entry as Record<string, unknown>;
+    if (typeof raw.id !== "string" || !(raw.id in MODULE_LABELS)) continue;
     const id = raw.id as HomeModuleId;
-    if (!(id in MODULE_LABELS) || known.has(id)) continue;
+    if (known.has(id)) continue;
     known.add(id);
     normalized.push({
       id,
