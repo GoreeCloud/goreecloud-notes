@@ -100,6 +100,11 @@ export type NoteListOptions = {
   query?: string;
 };
 
+export type NoteCreateContent = {
+  title?: string;
+  document?: NoteDocument;
+};
+
 export type NotePatch = Partial<
   Pick<Note, "title" | "document" | "notebook_id" | "state" | "is_pinned" | "color">
 > & {
@@ -332,13 +337,18 @@ export async function searchNotes(options: NoteListOptions & { query: string }):
   return (await apiFetch<Note[]>(`/search/notes?${params.toString()}`)).map(normalizeNote);
 }
 
-export async function createNote(notebookId: string | null = null): Promise<Note> {
+export async function createNote(
+  notebookId: string | null = null,
+  initial: NoteCreateContent = {},
+): Promise<Note> {
+  const title = initial.title ?? "";
+  const document = initial.document ?? emptyDocument();
   return normalizeNote(
     await apiFetch<Note>(
       "/notes",
       {
         method: "POST",
-        body: JSON.stringify({ title: "", document: emptyDocument(), notebook_id: notebookId }),
+        body: JSON.stringify({ title, document, notebook_id: notebookId }),
       },
       { csrf: true },
     ),
