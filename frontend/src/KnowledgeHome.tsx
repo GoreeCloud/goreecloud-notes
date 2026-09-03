@@ -102,12 +102,14 @@ function readScratch(userId: string): string {
   }
 }
 
-function writeScratch(userId: string, value: string): void {
+function writeScratch(userId: string, value: string): boolean {
   try {
     if (value) window.sessionStorage.setItem(scratchKey(userId), value);
     else window.sessionStorage.removeItem(scratchKey(userId));
+    return true;
   } catch {
     // Scratch Pad remains best-effort transient browser state until promoted to a Note.
+    return false;
   }
 }
 
@@ -225,6 +227,18 @@ export function KnowledgeHome({ onOpenWorkspace }: KnowledgeHomeProps) {
     if (user) writeScratch(user.id, value);
   }
 
+  function handleClearScratch() {
+    if (!user || !scratch) return;
+    if (!writeScratch(user.id, "")) {
+      setScratchStatus("Could not clear this tab’s transient Scratch Pad storage. The captured text remains visible so you can retry.");
+      setScratchStatusIsError(true);
+      return;
+    }
+    setScratch("");
+    setScratchStatus("");
+    setScratchStatusIsError(false);
+  }
+
   async function handleSaveScratchAsNote() {
     const source = scratch;
     if (!user || !source.trim() || scratchSaving) return;
@@ -238,8 +252,14 @@ export function KnowledgeHome({ onOpenWorkspace }: KnowledgeHomeProps) {
         document: textToDocument(source),
       });
       setNotes((current) => [created, ...current.filter((note) => note.id !== created.id)]);
-      updateScratch("");
-      setScratchStatus(`Saved as “${created.title || "Untitled"}”.`);
+      const scratchCleared = writeScratch(user.id, "");
+      if (scratchCleared) {
+        setScratch("");
+        setScratchStatus(`Saved as “${created.title || "Untitled"}”.`);
+      } else {
+        setScratchStatus(`Saved as “${created.title || "Untitled"}”, but this tab could not clear its transient Scratch Pad copy. The captured text remains visible so you can retry Clear.`);
+        setScratchStatusIsError(true);
+      }
     } catch (caught) {
       setScratchStatus(`Could not save Scratch Pad: ${messageFromError(caught)}`);
       setScratchStatusIsError(true);
@@ -274,9 +294,9 @@ export function KnowledgeHome({ onOpenWorkspace }: KnowledgeHomeProps) {
         <section className={moduleClass} key={item.id} aria-labelledby="knowledge-scratch-heading" aria-busy={scratchSaving}>
           <header className="knowledge-module-header"><div><span className="knowledge-kicker">Transient capture</span><h2 id="knowledge-scratch-heading">Scratch Pad</h2></div><span className="knowledge-private-badge">This tab</span></header>
           <textarea className="knowledge-scratch" value={scratch} maxLength={4000} placeholder="Capture a thought without creating a note yet…" aria-label="Scratch Pad" onChange={(event) => updateScratch(event.target.value)} disabled={scratchSaving} />
-          <div className="knowledge-scratch-footer"><span>{scratch.length.toLocaleString()} / 4,000</span><div className="knowledge-scratch-actions"><button className="knowledge-text-action" type="button" onClick={() => updateScratch("")} disabled={!scratch || scratchSaving}>Clear</button><button className="glaze-button knowledge-scratch-save" data-variant="primary" type="button" onClick={() => void handleSaveScratchAsNote()} disabled={!scratch.trim() || scratchSaving}>{scratchSaving ? "Saving…" : "Save as note"}</button></div></div>
+          <div className="knowledge-scratch-footer"><span>{scratch.length.toLocaleString()} / 4,000</span><div className="knowledge-scratch-actions"><button className="knowledge-text-action" type="button" onClick={handleClearScratch} disabled={!scratch || scratchSaving}>Clear</button><button className="glaze-button knowledge-scratch-save" data-variant="primary" type="button" onClick={() => void handleSaveScratchAsNote()} disabled={!scratch.trim() || scratchSaving}>{scratchSaving ? "Saving…" : "Save as note"}</button></div></div>
           {scratchStatus ? <p className={`knowledge-scratch-status${scratchStatusIsError ? " is-error" : ""}`} role={scratchStatusIsError ? "alert" : "status"}>{scratchStatus}</p> : null}
-          <p className="knowledge-module-note">Scratch Pad is session-scoped transient text, not a hidden note store. Save as note creates one normal owner-scoped Note; the transient copy is cleared only after that request succeeds.</p>
+          <p className="knowledge-module-note">Scratch Pad is session-scoped transient text, not a hidden note store. Save as note creates one normal owner-scoped Note; after that request succeeds, the transient copy is cleared when this tab’s session storage accepts the removal.</p>
         </section>
       );
     }
@@ -355,7 +375,7 @@ export function KnowledgeHome({ onOpenWorkspace }: KnowledgeHomeProps) {
 
       <div className="knowledge-home-grid">{visibleModules.map(renderModule)}{visibleModules.length === 0 ? <section className="knowledge-home-state glaze-panel glaze-surface-solid"><h2>Your Home is clear.</h2><p>Use Customize to show a module again.</p></section> : null}</div>
 
-      <footer className="knowledge-home-footer"><span>First-party GoreeCloud Notes · private session data only</span><button type="button" onClick={onOpenWorkspace}>Return to Notes workspace</button></footer>
+      <footer className="knowledge-home-footer"><span>First-party GoreeCloud Notes · owner-scoped Notes data and browser-local Home preferences</span><button type="button" onClick={onOpenWorkspace}>Return to Notes workspace</button></footer>
     </main>
   );
 }
