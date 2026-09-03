@@ -68,7 +68,7 @@ This does not establish complete current GLAZE UI V1.0 conformance for GoreeClou
 
 `frontend/scripts/validate-knowledge-home.mjs` is part of the normal frontend production build. It fails closed if the implemented module set, transient/local state boundaries, atomic Scratch Pad promotion contract, storage-aware cleanup and failure-preservation behavior, non-fabrication statements, route/draft-preservation hooks, solid content-surface requirement, 48-pixel covered target requirement, safe-area behavior, or required accessibility/resilience fallbacks disappear.
 
-Exact pull-request validation evidence is recorded in the pull request and canonical GoreeCloud project records rather than hard-coding the current branch head in this repository file, because changing that recorded head would itself create a new candidate commit requiring another exact-head validation cycle.
+Exact pull-request validation evidence belongs in pull-request and canonical GoreeCloud project records, not as a self-referential current-head value in this repository file.
 
 This source validator and CI evidence supplement TypeScript, lint, build, and integration validation. They are not substitutes for rendered browser or representative-device acceptance.
 
