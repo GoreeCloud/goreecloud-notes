@@ -26,7 +26,9 @@ Scratch Pad remains deliberately transient until the user chooses **Save as note
 
 Saving creates one normal owner-scoped GoreeCloud Note through the existing authenticated and CSRF-protected Notes API. Initial title and document content are sent in the same note-creation request so promotion does not rely on an empty-note-then-patch sequence. The first non-empty Scratch Pad line supplies a bounded title and the complete captured text is converted through the native GoreeCloud document contract.
 
-The transient Scratch Pad copy is cleared only after the durable create request succeeds. If promotion fails, the captured text remains available in the current tab and the failure is surfaced to the user. The successful Note is immediately added to Knowledge Home's current-note state so Recent Notes and the current-note summary reflect it without requiring a reload.
+The durable create request completes before any transient cleanup is attempted. Knowledge Home clears the visible Scratch Pad only when this tab's `sessionStorage` confirms removal of its transient copy. If durable note creation fails, the captured text remains available and the failure is surfaced. If durable creation succeeds but transient cleanup fails, the new Note remains created, the captured text intentionally remains visible, and the UI warns that the transient copy could not be cleared so the user can retry **Clear**. Manual Clear follows the same storage-aware rule and does not hide text when transient removal fails.
+
+A successfully created Note is immediately added to Knowledge Home's current-note state so Recent Notes and the current-note summary reflect it without requiring a reload.
 
 Scratch Pad is not a second note database and does not become durable merely because text exists in the transient capture field.
 
@@ -64,7 +66,7 @@ This does not establish complete current GLAZE UI V1.0 conformance for GoreeClou
 
 ## Validation contract
 
-`frontend/scripts/validate-knowledge-home.mjs` is part of the normal frontend production build. It fails closed if the implemented module set, transient/local state boundaries, atomic Scratch Pad promotion contract, failure-preservation behavior, non-fabrication statements, route/draft-preservation hooks, solid content-surface requirement, 48-pixel covered target requirement, safe-area behavior, or required accessibility/resilience fallbacks disappear.
+`frontend/scripts/validate-knowledge-home.mjs` is part of the normal frontend production build. It fails closed if the implemented module set, transient/local state boundaries, atomic Scratch Pad promotion contract, storage-aware cleanup and failure-preservation behavior, non-fabrication statements, route/draft-preservation hooks, solid content-surface requirement, 48-pixel covered target requirement, safe-area behavior, or required accessibility/resilience fallbacks disappear.
 
 This source validator supplements TypeScript, lint, build, and integration validation. It is not a substitute for rendered browser or real-device acceptance.
 
