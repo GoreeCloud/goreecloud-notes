@@ -26,6 +26,8 @@ for (const label of ["Recent Notes", "Pinned Notes", "Scratch Pad", "Shortcuts",
 
 requireText(home, 'window.localStorage.setItem(preferenceKey(userId)', "Home presentation preferences must remain local browser state.");
 requireText(home, 'window.sessionStorage.setItem(scratchKey(userId)', "Scratch Pad must remain session-scoped transient browser state.");
+requireText(home, 'window.sessionStorage.removeItem(scratchKey(userId))', "Scratch Pad must have an explicit transient-storage removal path.");
+requireText(home, "function writeScratch(userId: string, value: string): boolean", "Scratch Pad storage writes must report whether transient persistence operations succeeded.");
 requireText(home, "Scratch Pad is session-scoped transient text, not a hidden note store.", "Scratch Pad must state its non-authoritative persistence boundary.");
 requireText(home, "Save as note", "Scratch Pad must expose explicit promotion into a normal Note.");
 requireText(home, "createNote,", "Knowledge Home must use the established Notes API boundary for Scratch Pad promotion.");
@@ -34,15 +36,26 @@ requireText(home, "async function handleSaveScratchAsNote()", "Scratch Pad promo
 requireText(home, "const created = await createNote(null, {", "Scratch Pad promotion must create the populated note in one owner-authorized request.");
 requireText(home, "document: textToDocument(source)", "Scratch Pad promotion must convert transient text through the native document contract.");
 requireText(home, "setNotes((current) => [created", "Successful Scratch Pad promotion must immediately refresh Home's native note state.");
+requireText(home, 'const scratchCleared = writeScratch(user.id, "");', "Scratch Pad promotion must verify transient-storage removal after durable creation.");
+requireText(home, "if (scratchCleared)", "Scratch Pad UI text must remain visible when transient-storage removal fails.");
+requireText(home, "could not clear its transient Scratch Pad copy", "Successful durable promotion with failed transient cleanup must be disclosed.");
 requireText(home, "Could not save Scratch Pad:", "Failed Scratch Pad promotion must surface an explicit error while leaving transient text available.");
+requireText(home, "function handleClearScratch()", "Manual Scratch Pad clearing must use a recoverable storage-aware path.");
+requireText(home, "The captured text remains visible so you can retry.", "Manual clear failure must preserve visible transient text.");
 requireText(home, "disabled={scratchSaving}", "Scratch Pad editing must pause while durable promotion is in flight.");
-requireText(home, "the transient copy is cleared only after that request succeeds.", "Scratch Pad must disclose when transient state is cleared.");
+requireText(home, "the transient copy is cleared when this tab’s session storage accepts the removal.", "Scratch Pad must truthfully disclose transient cleanup behavior.");
 
 const scratchSaveStart = home.indexOf("async function handleSaveScratchAsNote()");
 const scratchCreate = home.indexOf("const created = await createNote(null, {", scratchSaveStart);
-const scratchClear = home.indexOf('updateScratch("");', scratchCreate);
-if (scratchSaveStart < 0 || scratchCreate < scratchSaveStart || scratchClear < scratchCreate) {
-  failures.push("Scratch Pad transient text must be cleared only after the durable note create call succeeds.");
+const scratchClearAttempt = home.indexOf('const scratchCleared = writeScratch(user.id, "");', scratchCreate);
+const scratchUiClear = home.indexOf('setScratch("");', scratchClearAttempt);
+if (
+  scratchSaveStart < 0
+  || scratchCreate < scratchSaveStart
+  || scratchClearAttempt < scratchCreate
+  || scratchUiClear < scratchClearAttempt
+) {
+  failures.push("Scratch Pad transient state must be cleared only after the durable note create call succeeds and browser storage confirms removal.");
 }
 
 requireText(api, "export type NoteCreateContent = {", "The Notes client API must define bounded initial content for atomic note creation.");
