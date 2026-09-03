@@ -68,7 +68,7 @@ This does not establish complete current GLAZE UI V1.0 conformance for GoreeClou
 
 `frontend/scripts/validate-knowledge-home.mjs` is part of the normal frontend production build. It fails closed if the implemented module set, transient/local state boundaries, atomic Scratch Pad promotion contract, storage-aware cleanup and failure-preservation behavior, non-fabrication statements, route/draft-preservation hooks, solid content-surface requirement, 48-pixel covered target requirement, safe-area behavior, or required accessibility/resilience fallbacks disappear.
 
-The Scratch Pad promotion checkpoint was validated at source revision `87c9f1eed701ea5da700672ca883925492a3fda8` by Continuous Integration run #353 (`33721579600`) and Production Runtime Preflight run #104 (`33721579480`). The frontend lint/build job, backend test job, and full disposable Compose validation chain passed on that exact revision. Production Runtime Preflight used its synthetic production-configuration boundary; this is not evidence of a production deployment.
+Exact pull-request validation evidence is recorded in the pull request and canonical GoreeCloud project records rather than hard-coding the current branch head in this repository file, because changing that recorded head would itself create a new candidate commit requiring another exact-head validation cycle.
 
 This source validator and CI evidence supplement TypeScript, lint, build, and integration validation. They are not substitutes for rendered browser or representative-device acceptance.
 
