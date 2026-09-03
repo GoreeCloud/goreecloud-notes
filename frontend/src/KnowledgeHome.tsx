@@ -15,7 +15,7 @@ import {
   type Tag,
 } from "./api";
 
-type HomeModuleId = "recent" | "pinned" | "scratch" | "shortcuts" | "tags";
+type HomeModuleId = "recent" | "relevant" | "pinned" | "scratch" | "shortcuts" | "tags";
 type HomeModuleSize = "standard" | "wide";
 
 type HomeModulePreference = {
@@ -30,6 +30,7 @@ type KnowledgeHomeProps = {
 
 const DEFAULT_MODULES: HomeModulePreference[] = [
   { id: "recent", visible: true, size: "wide" },
+  { id: "relevant", visible: true, size: "standard" },
   { id: "scratch", visible: true, size: "standard" },
   { id: "pinned", visible: true, size: "standard" },
   { id: "shortcuts", visible: true, size: "standard" },
@@ -38,6 +39,7 @@ const DEFAULT_MODULES: HomeModulePreference[] = [
 
 const MODULE_LABELS: Record<HomeModuleId, string> = {
   recent: "Recent Notes",
+  relevant: "Relevant Notes",
   pinned: "Pinned Notes",
   scratch: "Scratch Pad",
   shortcuts: "Shortcuts",
@@ -123,6 +125,14 @@ function noteExcerpt(note: Note): string {
   return value || "Empty note";
 }
 
+function relevanceScore(note: Note): number {
+  const bodyLength = documentToText(note.document).trim().length;
+  return (note.is_pinned ? 3 : 0)
+    + (note.title.trim() ? 1 : 0)
+    + (bodyLength >= 240 ? 1 : 0)
+    + (bodyLength >= 1000 ? 1 : 0);
+}
+
 function scratchNoteTitle(value: string): string {
   for (const line of value.split(/\r?\n/)) {
     const clean = line.trim().replace(/\s+/g, " ");
@@ -193,6 +203,14 @@ export function KnowledgeHome({ onOpenWorkspace }: KnowledgeHomeProps) {
 
   const recentNotes = useMemo(
     () => [...notes].sort((left, right) => Date.parse(right.updated_at) - Date.parse(left.updated_at)).slice(0, 6),
+    [notes],
+  );
+  const relevantNotes = useMemo(
+    () => [...notes]
+      .sort((left, right) => relevanceScore(right) - relevanceScore(left)
+        || Date.parse(right.updated_at) - Date.parse(left.updated_at)
+        || left.id.localeCompare(right.id))
+      .slice(0, 4),
     [notes],
   );
   const pinnedNotes = useMemo(() => notes.filter((note) => note.is_pinned).slice(0, 4), [notes]);
@@ -280,6 +298,16 @@ export function KnowledgeHome({ onOpenWorkspace }: KnowledgeHomeProps) {
       );
     }
 
+    if (item.id === "relevant") {
+      return (
+        <section className={moduleClass} key={item.id} aria-labelledby="knowledge-relevant-heading">
+          <header className="knowledge-module-header"><div><span className="knowledge-kicker">Transparent local ranking</span><h2 id="knowledge-relevant-heading">Relevant Notes</h2></div></header>
+          <div className="knowledge-note-grid knowledge-note-grid-compact">{relevantNotes.map((note) => <HomeNoteCard key={note.id} note={note} />)}{relevantNotes.length === 0 ? <p className="knowledge-empty">No current notes to rank yet.</p> : null}</div>
+          <p className="knowledge-module-note">Ranked only from native pin state, note substance, update order, and a stable ID tie-break. No behavioral tracking, remote recommendation service, or AI inference is used.</p>
+        </section>
+      );
+    }
+
     if (item.id === "pinned") {
       return (
         <section className={moduleClass} key={item.id} aria-labelledby="knowledge-pinned-heading">
@@ -348,7 +376,7 @@ export function KnowledgeHome({ onOpenWorkspace }: KnowledgeHomeProps) {
       </header>
 
       <section className="knowledge-home-heading">
-        <div><p className="knowledge-kicker">Private knowledge workspace</p><h1>{user.display_name ? `${user.display_name}’s Home` : "Your Knowledge Home"}</h1><p>Recent work and owned Notes context, composed as a native GoreeCloud home rather than a duplicate task, calendar, or recommendation system.</p></div>
+        <div><p className="knowledge-kicker">Private knowledge workspace</p><h1>{user.display_name ? `${user.display_name}’s Home` : "Your Knowledge Home"}</h1><p>Recent work and owned Notes context, including a transparent local relevance ranking rather than a behavioral recommendation service.</p></div>
         <div className="knowledge-home-summary" aria-label="Library summary"><span><strong>{notes.length}</strong> current notes</span><span><strong>{notebooks.length}</strong> notebooks</span><span><strong>{tags.length}</strong> tags</span></div>
       </section>
 
@@ -369,7 +397,7 @@ export function KnowledgeHome({ onOpenWorkspace }: KnowledgeHomeProps) {
               </div>
             ))}
           </div>
-          <p className="knowledge-module-note">Suggested/Relevant Notes are withheld until deterministic ranking is approved. Recently Captured is withheld until capture provenance is connected. GoreeCloud Tasks and Calendar modules are withheld until their authoritative capabilities are discoverable through GoreeCloud Mesh.</p>
+          <p className="knowledge-module-note">Relevant Notes uses a transparent local deterministic ranking over already authorized Notes data. Recently Captured is withheld until capture provenance is connected. GoreeCloud Tasks and Calendar modules are withheld until their authoritative capabilities are discoverable through GoreeCloud Mesh.</p>
         </section>
       ) : null}
 

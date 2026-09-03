@@ -20,7 +20,7 @@ function forbidText(haystack, needle, message) {
   if (haystack.includes(needle)) failures.push(message);
 }
 
-for (const label of ["Recent Notes", "Pinned Notes", "Scratch Pad", "Shortcuts", "Tags"]) {
+for (const label of ["Recent Notes", "Relevant Notes", "Pinned Notes", "Scratch Pad", "Shortcuts", "Tags"]) {
   requireText(home, label, `Knowledge Home must retain the ${label} module.`);
 }
 
@@ -63,7 +63,13 @@ requireText(api, "initial: NoteCreateContent = {}", "Existing createNote callers
 requireText(api, 'const document = initial.document ?? emptyDocument();', "Normal empty-note creation must remain the default behavior.");
 requireText(api, "JSON.stringify({ title, document, notebook_id: notebookId })", "Populated note creation must remain one CSRF-protected native API request.");
 
-requireText(home, "Suggested/Relevant Notes are withheld until deterministic ranking is approved.", "Home must not fabricate recommendation behavior.");
+requireText(home, "function relevanceScore(note: Note): number", "Relevant Notes must use an explicit deterministic local ranking function.");
+requireText(home, "note.is_pinned ? 3 : 0", "Relevant Notes ranking must retain the documented native pin-state contribution.");
+requireText(home, "bodyLength >= 240 ? 1 : 0", "Relevant Notes ranking must retain the documented bounded note-substance contribution.");
+requireText(home, "Date.parse(right.updated_at) - Date.parse(left.updated_at)", "Relevant Notes must use native update order as a deterministic tie-break.");
+requireText(home, "left.id.localeCompare(right.id)", "Relevant Notes must use a stable ID tie-break rather than nondeterministic ordering.");
+requireText(home, "No behavioral tracking, remote recommendation service, or AI inference is used.", "Relevant Notes must disclose its local non-behavioral non-AI boundary.");
+requireText(home, "Relevant Notes uses a transparent local deterministic ranking over already authorized Notes data.", "Home customization must disclose the Relevant Notes data-authority boundary.");
 requireText(home, "Recently Captured is withheld until capture provenance is connected.", "Home must not fabricate capture provenance.");
 requireText(home, "GoreeCloud Tasks and Calendar modules are withheld until their authoritative capabilities are discoverable through GoreeCloud Mesh.", "Home must not duplicate Tasks or Calendar authority before Mesh capability discovery.");
 requireText(home, 'typeof raw.id !== "string"', "Stored customization parsing must fail safely for malformed module identifiers.");
@@ -91,6 +97,7 @@ forbidText(home, "fetch(\"http", "Knowledge Home must not introduce remote data 
 forbidText(home, "https://", "Knowledge Home must not introduce remote service or asset dependencies.");
 forbidText(home, "OpenAI", "Knowledge Home must not imply an unimplemented AI dependency.");
 forbidText(home, "Gemini", "Knowledge Home must not imply an unimplemented AI dependency.");
+forbidText(home, "localStorage.setItem(\"goreecloud.notes.relevance", "Relevant Notes must not introduce behavioral or derived-ranking persistence.");
 
 if (failures.length > 0) {
   console.error("Knowledge Home validation failed:\n" + failures.map((failure) => `- ${failure}`).join("\n"));

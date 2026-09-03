@@ -2,7 +2,7 @@
 
 ## Status
 
-Knowledge Home is an active native source-development checkpoint on `feature/knowledge-home-foundation`. It is not a production deployment, Stable-release claim, or proof of complete current GLAZE UI V1.0 acceptance.
+Knowledge Home is an active native source-development checkpoint on `feature/knowledge-home-foundation` and stacked continuation branches. It is not a production deployment, Stable-release claim, or proof of complete current GLAZE UI V1.0 acceptance.
 
 The surface is inspired by useful knowledge-home information architecture seen in note applications, including the user-supplied Evernote references, but its implementation, state model, styling, privacy boundaries, and interaction behavior are GoreeCloud-owned.
 
@@ -13,12 +13,27 @@ The source implementation is exposed through the local `#knowledge-home` applica
 Implemented modules are:
 
 - Recent Notes, ordered by existing note update timestamps.
+- Relevant Notes, ranked deterministically and locally from already authorized native Notes state.
 - Pinned Notes, derived from native `is_pinned` state.
 - Scratch Pad, using session-scoped browser storage for transient capture with explicit promotion into a normal Note.
 - Shortcuts, summarizing current Notes, notebooks, Archive, and Trash counts.
 - Tags, derived from the authenticated user's existing tag collection.
 
 The Home customizer supports module visibility, ordering, and the currently supported standard/wide size choice. These are presentation preferences stored locally in the browser under a user-specific key; they are not server-authoritative knowledge state and are not exported as Notes data.
+
+## Relevant Notes boundary
+
+Relevant Notes is deliberately transparent and deterministic. It is not an AI recommendation service and does not learn from clicks, dwell time, editor behavior, navigation history, account activity, or other behavioral signals.
+
+The current ranking uses only note data already loaded for the authenticated owner by Knowledge Home:
+
+1. native pin state contributes the strongest explicit relevance weight;
+2. a non-empty title contributes one bounded point;
+3. body substance contributes bounded points at the documented 240-character and 1,000-character thresholds;
+4. existing `updated_at` order breaks equal-score ties; and
+5. the existing note ID provides a final stable deterministic tie-break.
+
+No ranking score, derived profile, click history, or recommendation history is persisted. The module performs no remote request and introduces no model, vector store, embedding service, telemetry dependency, or cross-application data source. Changing this ranking into personalized intelligence would require a separately reviewed privacy, authority, product, and platform-system contract.
 
 ## Scratch Pad boundary
 
@@ -28,23 +43,22 @@ Saving creates one normal owner-scoped GoreeCloud Note through the existing auth
 
 The durable create request completes before any transient cleanup is attempted. Knowledge Home clears the visible Scratch Pad only when this tab's `sessionStorage` confirms removal of its transient copy. If durable note creation fails, the captured text remains available and the failure is surfaced. If durable creation succeeds but transient cleanup fails, the new Note remains created, the captured text intentionally remains visible, and the UI warns that the transient copy could not be cleared so the user can retry **Clear**. Manual Clear follows the same storage-aware rule and does not hide text when transient removal fails.
 
-A successfully created Note is immediately added to Knowledge Home's current-note state so Recent Notes and the current-note summary reflect it without requiring a reload.
+A successfully created Note is immediately added to Knowledge Home's current-note state so Recent Notes, Relevant Notes, and the current-note summary reflect it without requiring a reload.
 
 Scratch Pad is not a second note database and does not become durable merely because text exists in the transient capture field.
 
-## Platform-system boundary for Scratch Pad promotion
+## Platform-system boundary for Knowledge Home
 
-This increment reuses the existing owner-scoped Notes authority rather than introducing a new product or control plane. GoreeCloud Identity remains represented by the established authenticated account/session boundary; the existing CSRF-protected Notes write path remains the security boundary for the create operation; no new sharing, external transfer, attachment, or cross-application data flow is introduced. Durable Notes continue to use the application's existing portability, export, and recovery path rather than a separate Scratch Pad persistence model.
+These increments reuse the existing owner-scoped Notes authority rather than introducing a new product or control plane. GoreeCloud Identity remains represented by the established authenticated account/session boundary; the existing CSRF-protected Notes write path remains the security boundary for Scratch Pad note creation; no new sharing, external transfer, attachment, or cross-application data flow is introduced by Relevant Notes.
 
-GoreeCloud Manager receives no new administrative operation in this increment. Privacy Shield and Wardveil Security responsibilities remain within the existing Notes data-flow and authenticated write controls. Everkeep continuity remains attached to normal Notes data. GoreeCloud Mesh is not invoked because Scratch Pad promotion is internal to Notes. Glaze UI applies to the new save/status controls and their adaptive/accessibility behavior.
+GoreeCloud Manager receives no new administrative operation. Privacy Shield and Wardveil Security responsibilities remain within the existing Notes data-flow and authenticated write controls. Relevant Notes adds no behavioral profile or persisted recommendation state. Everkeep continuity remains attached to normal Notes data rather than Home presentation/ranking state. GoreeCloud Mesh is not invoked by the local relevance module or Scratch Pad promotion because both are internal to Notes. GLAZE UI V1.0 remains the mandatory application design target for the new module and controls.
 
-These statements describe the source-level boundary of this increment; they do not claim complete application-wide conformance with every current Platform System contract.
+These statements describe source-level boundaries only; they do not claim complete application-wide acceptance with every current Platform System contract.
 
 ## Non-fabrication boundaries
 
 The approved product direction includes additional modules, but this checkpoint intentionally withholds them when their authoritative data or behavior is not implemented:
 
-- Suggested or Relevant Notes are not shown until deterministic ranking or separately approved intelligence is implemented and validated.
 - Recently Captured is not shown until capture-source provenance and actual capture state are connected.
 - GoreeCloud Tasks and GoreeCloud Calendar modules are not shown until their authoritative capabilities are discoverable through GoreeCloud Mesh and the Notes consumer boundary is implemented.
 
@@ -60,13 +74,13 @@ This is a deliberate foundation behavior, not the final integrated navigation mo
 
 ## GLAZE UI treatment
 
-Knowledge Home uses the locally available Glaze semantic surface and interaction variables already present in GoreeCloud Notes. New Home content modules use solid content surfaces; glazed treatment is concentrated in transient top-level chrome. Covered Home controls, including Scratch Pad's durable-save action, use 48-pixel minimum targets, and the surface includes compact safe-area handling, reduced-motion behavior, reduced-transparency and no-backdrop-filter fallbacks, and forced-colors behavior.
+Knowledge Home uses the locally available GLAZE UI V1.0 semantic surface and interaction variables already present in GoreeCloud Notes. New Home content modules use solid content surfaces; glazed treatment is concentrated in transient top-level chrome. Covered Home controls, including Scratch Pad's durable-save action, use 48-pixel minimum targets, and the surface includes compact safe-area handling, reduced-motion behavior, reduced-transparency and no-backdrop-filter fallbacks, and forced-colors behavior.
 
 This does not establish complete current GLAZE UI V1.0 conformance for GoreeCloud Notes. The broader application still requires canonical current-design-system reconciliation plus fresh exact-revision rendered, accessibility, resilience, layout, material, motion, interaction, performance, and representative-device acceptance before that claim is allowed.
 
 ## Validation contract
 
-`frontend/scripts/validate-knowledge-home.mjs` is part of the normal frontend production build. It fails closed if the implemented module set, transient/local state boundaries, atomic Scratch Pad promotion contract, storage-aware cleanup and failure-preservation behavior, non-fabrication statements, route/draft-preservation hooks, solid content-surface requirement, 48-pixel covered target requirement, safe-area behavior, or required accessibility/resilience fallbacks disappear.
+`frontend/scripts/validate-knowledge-home.mjs` is part of the normal frontend production build. It fails closed if the implemented module set, transparent deterministic Relevant Notes ranking, transient/local state boundaries, atomic Scratch Pad promotion contract, storage-aware cleanup and failure-preservation behavior, non-fabrication statements, route/draft-preservation hooks, solid content-surface requirement, 48-pixel covered target requirement, safe-area behavior, or required accessibility/resilience fallbacks disappear.
 
 Exact pull-request validation evidence belongs in pull-request and canonical GoreeCloud project records, not as a self-referential current-head value in this repository file.
 
@@ -78,10 +92,10 @@ The following remain outside this source checkpoint:
 
 - direct item-level navigation from Home cards into the primary workspace;
 - integration of Knowledge Home as the primary in-app Home destination under the unsaved-draft guard;
-- deterministic Suggested/Relevant Notes;
 - provenance-backed Recently Captured;
 - GoreeCloud Mesh-backed Tasks and Calendar modules;
 - user-configurable background/canvas personalization;
 - additional module sizing/layout options;
+- personalized or intelligence-backed recommendation behavior beyond the current transparent deterministic local ranking;
 - complete GLAZE UI V1.0 application-wide reconciliation and rendered acceptance;
 - production deployment, publication, monitoring, recovery, migration, and Stable-release approval.
