@@ -6,6 +6,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const src = resolve(here, "../src");
 
 const home = readFileSync(resolve(src, "KnowledgeHome.tsx"), "utf8");
+const api = readFileSync(resolve(src, "api.ts"), "utf8");
 const css = readFileSync(resolve(src, "knowledge-home.css"), "utf8");
 const main = readFileSync(resolve(src, "main.tsx"), "utf8");
 
@@ -26,6 +27,29 @@ for (const label of ["Recent Notes", "Pinned Notes", "Scratch Pad", "Shortcuts",
 requireText(home, 'window.localStorage.setItem(preferenceKey(userId)', "Home presentation preferences must remain local browser state.");
 requireText(home, 'window.sessionStorage.setItem(scratchKey(userId)', "Scratch Pad must remain session-scoped transient browser state.");
 requireText(home, "Scratch Pad is session-scoped transient text, not a hidden note store.", "Scratch Pad must state its non-authoritative persistence boundary.");
+requireText(home, "Save as note", "Scratch Pad must expose explicit promotion into a normal Note.");
+requireText(home, "createNote,", "Knowledge Home must use the established Notes API boundary for Scratch Pad promotion.");
+requireText(home, "textToDocument,", "Scratch Pad promotion must use the GoreeCloud document contract converter.");
+requireText(home, "async function handleSaveScratchAsNote()", "Scratch Pad promotion must use a dedicated async save boundary.");
+requireText(home, "const created = await createNote(null, {", "Scratch Pad promotion must create the populated note in one owner-authorized request.");
+requireText(home, "document: textToDocument(source)", "Scratch Pad promotion must convert transient text through the native document contract.");
+requireText(home, "setNotes((current) => [created", "Successful Scratch Pad promotion must immediately refresh Home's native note state.");
+requireText(home, "Could not save Scratch Pad:", "Failed Scratch Pad promotion must surface an explicit error while leaving transient text available.");
+requireText(home, "disabled={scratchSaving}", "Scratch Pad editing must pause while durable promotion is in flight.");
+requireText(home, "the transient copy is cleared only after that request succeeds.", "Scratch Pad must disclose when transient state is cleared.");
+
+const scratchSaveStart = home.indexOf("async function handleSaveScratchAsNote()");
+const scratchCreate = home.indexOf("const created = await createNote(null, {", scratchSaveStart);
+const scratchClear = home.indexOf('updateScratch("");', scratchCreate);
+if (scratchSaveStart < 0 || scratchCreate < scratchSaveStart || scratchClear < scratchCreate) {
+  failures.push("Scratch Pad transient text must be cleared only after the durable note create call succeeds.");
+}
+
+requireText(api, "export type NoteCreateContent = {", "The Notes client API must define bounded initial content for atomic note creation.");
+requireText(api, "initial: NoteCreateContent = {}", "Existing createNote callers must remain backward-compatible while initial content is supported.");
+requireText(api, 'const document = initial.document ?? emptyDocument();', "Normal empty-note creation must remain the default behavior.");
+requireText(api, "JSON.stringify({ title, document, notebook_id: notebookId })", "Populated note creation must remain one CSRF-protected native API request.");
+
 requireText(home, "Suggested/Relevant Notes are withheld until deterministic ranking is approved.", "Home must not fabricate recommendation behavior.");
 requireText(home, "Recently Captured is withheld until capture provenance is connected.", "Home must not fabricate capture provenance.");
 requireText(home, "GoreeCloud Tasks and Calendar modules are withheld until their authoritative capabilities are discoverable through GoreeCloud Mesh.", "Home must not duplicate Tasks or Calendar authority before Mesh capability discovery.");
@@ -41,6 +65,8 @@ requireText(main, 'from "./KnowledgeHome"', "Root must import the native Knowled
 requireText(main, 'import "./knowledge-home.css"', "Root must load Knowledge Home styling.");
 
 requireText(css, "min-height: 48px", "Covered Knowledge Home controls must meet the current 48px minimum target requirement.");
+requireText(css, ".knowledge-scratch-actions .glaze-button", "Scratch Pad durable-save controls must use covered 48px targets.");
+requireText(css, ".knowledge-scratch-status", "Scratch Pad promotion must have visible success/error status styling.");
 requireText(css, "env(safe-area-inset-top)", "Compact Knowledge Home must account for device safe areas.");
 requireText(css, "prefers-reduced-motion: reduce", "Knowledge Home must support reduced motion.");
 requireText(css, "prefers-reduced-transparency: reduce", "Knowledge Home must support reduced transparency.");
