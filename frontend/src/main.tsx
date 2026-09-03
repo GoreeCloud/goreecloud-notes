@@ -44,9 +44,17 @@ function Root() {
       {accountSecurityOpen ? <AccountSecurityPage /> : knowledgeHomeOpen ? <KnowledgeHome onOpenWorkspace={openWorkspace} /> : <App />}
       <aside className="glaze-utility-dock glaze-overlay" aria-label="Application controls">
         <AppearanceControl />
-        {!accountSecurityOpen ? (
-          <a className="account-security-launcher glaze-button" href={knowledgeHomeOpen ? "#" : "#knowledge-home"}>
-            {knowledgeHomeOpen ? "Notes workspace" : "Knowledge Home"}
+        {!accountSecurityOpen ? knowledgeHomeOpen ? (
+          <a className="account-security-launcher glaze-button" href="#">Notes workspace</a>
+        ) : (
+          <a
+            className="account-security-launcher glaze-button"
+            href="#knowledge-home"
+            target="_blank"
+            rel="noopener"
+            title="Open Knowledge Home in a new tab so the current Notes draft remains open"
+          >
+            Knowledge Home
           </a>
         ) : null}
         {!accountSecurityOpen ? (
