@@ -2,11 +2,13 @@ import { useEffect, useMemo, useState } from "react";
 
 import {
   ApiError,
+  createNote,
   documentToText,
   getCurrentUser,
   listNotebooks,
   listNotes,
   listTags,
+  textToDocument,
   type CurrentUser,
   type Note,
   type Notebook,
@@ -119,6 +121,14 @@ function noteExcerpt(note: Note): string {
   return value || "Empty note";
 }
 
+function scratchNoteTitle(value: string): string {
+  for (const line of value.split(/\r?\n/)) {
+    const clean = line.trim().replace(/\s+/g, " ");
+    if (clean) return clean.slice(0, 120);
+  }
+  return "Scratch Pad";
+}
+
 function HomeNoteCard({ note }: { note: Note }) {
   return (
     <article className="knowledge-note-card glaze-surface-solid">
@@ -141,6 +151,9 @@ export function KnowledgeHome({ onOpenWorkspace }: KnowledgeHomeProps) {
   const [tags, setTags] = useState<Tag[]>([]);
   const [preferences, setPreferences] = useState<HomeModulePreference[]>(DEFAULT_MODULES);
   const [scratch, setScratch] = useState("");
+  const [scratchSaving, setScratchSaving] = useState(false);
+  const [scratchStatus, setScratchStatus] = useState("");
+  const [scratchStatusIsError, setScratchStatusIsError] = useState(false);
   const [customizing, setCustomizing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -207,7 +220,32 @@ export function KnowledgeHome({ onOpenWorkspace }: KnowledgeHomeProps) {
 
   function updateScratch(value: string) {
     setScratch(value);
+    setScratchStatus("");
+    setScratchStatusIsError(false);
     if (user) writeScratch(user.id, value);
+  }
+
+  async function handleSaveScratchAsNote() {
+    const source = scratch;
+    if (!user || !source.trim() || scratchSaving) return;
+
+    setScratchSaving(true);
+    setScratchStatus("");
+    setScratchStatusIsError(false);
+    try {
+      const created = await createNote(null, {
+        title: scratchNoteTitle(source),
+        document: textToDocument(source),
+      });
+      setNotes((current) => [created, ...current.filter((note) => note.id !== created.id)]);
+      updateScratch("");
+      setScratchStatus(`Saved as “${created.title || "Untitled"}”.`);
+    } catch (caught) {
+      setScratchStatus(`Could not save Scratch Pad: ${messageFromError(caught)}`);
+      setScratchStatusIsError(true);
+    } finally {
+      setScratchSaving(false);
+    }
   }
 
   function renderModule(item: HomeModulePreference) {
@@ -233,11 +271,12 @@ export function KnowledgeHome({ onOpenWorkspace }: KnowledgeHomeProps) {
 
     if (item.id === "scratch") {
       return (
-        <section className={moduleClass} key={item.id} aria-labelledby="knowledge-scratch-heading">
+        <section className={moduleClass} key={item.id} aria-labelledby="knowledge-scratch-heading" aria-busy={scratchSaving}>
           <header className="knowledge-module-header"><div><span className="knowledge-kicker">Transient capture</span><h2 id="knowledge-scratch-heading">Scratch Pad</h2></div><span className="knowledge-private-badge">This tab</span></header>
-          <textarea className="knowledge-scratch" value={scratch} maxLength={4000} placeholder="Capture a thought without creating a note yet…" aria-label="Scratch Pad" onChange={(event) => updateScratch(event.target.value)} />
-          <div className="knowledge-scratch-footer"><span>{scratch.length.toLocaleString()} / 4,000</span><button className="knowledge-text-action" type="button" onClick={() => updateScratch("")} disabled={!scratch}>Clear</button></div>
-          <p className="knowledge-module-note">Scratch Pad is session-scoped transient text, not a hidden note store. Promotion into a normal Note remains a separately gated follow-up.</p>
+          <textarea className="knowledge-scratch" value={scratch} maxLength={4000} placeholder="Capture a thought without creating a note yet…" aria-label="Scratch Pad" onChange={(event) => updateScratch(event.target.value)} disabled={scratchSaving} />
+          <div className="knowledge-scratch-footer"><span>{scratch.length.toLocaleString()} / 4,000</span><div className="knowledge-scratch-actions"><button className="knowledge-text-action" type="button" onClick={() => updateScratch("")} disabled={!scratch || scratchSaving}>Clear</button><button className="glaze-button knowledge-scratch-save" data-variant="primary" type="button" onClick={() => void handleSaveScratchAsNote()} disabled={!scratch.trim() || scratchSaving}>{scratchSaving ? "Saving…" : "Save as note"}</button></div></div>
+          {scratchStatus ? <p className={`knowledge-scratch-status${scratchStatusIsError ? " is-error" : ""}`} role={scratchStatusIsError ? "alert" : "status"}>{scratchStatus}</p> : null}
+          <p className="knowledge-module-note">Scratch Pad is session-scoped transient text, not a hidden note store. Save as note creates one normal owner-scoped Note; the transient copy is cleared only after that request succeeds.</p>
         </section>
       );
     }
