@@ -26,6 +26,7 @@
 .knowledge-module-header > div,
 .knowledge-customizer header,
 .knowledge-scratch-footer,
+.knowledge-scratch-actions,
 .knowledge-home-footer {
   display: flex;
   align-items: center;
@@ -75,7 +76,8 @@
 .knowledge-home-footer button,
 .knowledge-text-action,
 .knowledge-customizer-row button,
-.knowledge-shortcuts button {
+.knowledge-shortcuts button,
+.knowledge-scratch-actions .glaze-button {
   min-height: 48px;
 }
 
@@ -277,8 +279,27 @@
 .knowledge-scratch-footer {
   min-height: 48px;
   justify-content: space-between;
+  gap: 10px;
   color: var(--glaze-muted);
   font-size: 0.78rem;
+}
+
+.knowledge-scratch-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.knowledge-scratch-status {
+  margin: 2px 0 8px;
+  color: var(--glaze-success);
+  font-size: 0.8rem;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.knowledge-scratch-status.is-error {
+  color: var(--glaze-danger);
 }
 
 .knowledge-module-note {
@@ -487,6 +508,16 @@
     grid-column: auto;
   }
 
+  .knowledge-scratch-footer {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .knowledge-scratch-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
   .knowledge-customizer-row {
     align-items: flex-start;
     flex-direction: column;
@@ -516,6 +547,10 @@
 
   .knowledge-shortcuts {
     grid-template-columns: 1fr;
+  }
+
+  .knowledge-scratch-actions .glaze-button {
+    flex: 1 1 150px;
   }
 }
 
