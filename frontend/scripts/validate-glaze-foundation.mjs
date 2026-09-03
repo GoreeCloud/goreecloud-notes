@@ -151,6 +151,7 @@ const expectedStyleOrder = [
   'import "./rich-editor.css";',
   'import "./attachments.css";',
   'import "./account-security.css";',
+  'import "./knowledge-home.css";',
   'import "./glaze-theme-bridge.css";',
   'import "./glaze-foundation.css";',
 ];

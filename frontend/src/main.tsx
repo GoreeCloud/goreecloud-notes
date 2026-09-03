@@ -5,6 +5,7 @@ import AccountSecurityPage from "./AccountSecurityPage";
 import App from "./App";
 import { AppearanceControl } from "./AppearanceControl";
 import { initializeAppearancePreference } from "./appearance";
+import { KnowledgeHome } from "./KnowledgeHome";
 import { WorkspaceNavigationGuard } from "./WorkspaceNavigationGuard";
 import "./glaze/glaze.css";
 import "./glaze/glaze.accessibility.css";
@@ -13,6 +14,7 @@ import "./organization.css";
 import "./rich-editor.css";
 import "./attachments.css";
 import "./account-security.css";
+import "./knowledge-home.css";
 import "./glaze-theme-bridge.css";
 import "./glaze-foundation.css";
 
@@ -31,12 +33,30 @@ function Root() {
   }, []);
 
   const accountSecurityOpen = hash === "#account-security";
+  const knowledgeHomeOpen = hash === "#knowledge-home";
+
+  function openWorkspace() {
+    window.location.hash = "";
+  }
 
   return (
     <div className="notes-root glaze-canvas">
-      {accountSecurityOpen ? <AccountSecurityPage /> : <App />}
+      {accountSecurityOpen ? <AccountSecurityPage /> : knowledgeHomeOpen ? <KnowledgeHome onOpenWorkspace={openWorkspace} /> : <App />}
       <aside className="glaze-utility-dock glaze-overlay" aria-label="Application controls">
         <AppearanceControl />
+        {!accountSecurityOpen ? knowledgeHomeOpen ? (
+          <a className="account-security-launcher glaze-button" href="#">Notes workspace</a>
+        ) : (
+          <a
+            className="account-security-launcher glaze-button"
+            href="#knowledge-home"
+            target="_blank"
+            rel="noopener"
+            title="Open Knowledge Home in a new tab so the current Notes draft remains open"
+          >
+            Knowledge Home
+          </a>
+        ) : null}
         {!accountSecurityOpen ? (
           <a
             className="account-security-launcher glaze-button"
