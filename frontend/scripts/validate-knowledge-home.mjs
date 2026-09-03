@@ -32,6 +32,7 @@ requireText(home, "GoreeCloud Tasks and Calendar modules are withheld until thei
 requireText(home, 'typeof raw.id !== "string"', "Stored customization parsing must fail safely for malformed module identifiers.");
 requireText(home, 'listNotes({ state: "archived" })', "Home must derive Archive summary from the existing owner-scoped Notes API.");
 requireText(home, 'listNotes({ state: "trashed" })', "Home must derive Trash summary from the existing owner-scoped Notes API.");
+requireText(home, "glaze-surface-solid", "Knowledge Home content modules must use solid content surfaces.");
 
 requireText(main, 'hash === "#knowledge-home"', "Root must expose the Knowledge Home route.");
 requireText(main, 'target="_blank"', "Knowledge Home launcher must preserve the current Notes tab while explicit Save remains authoritative.");
@@ -46,7 +47,6 @@ requireText(css, "prefers-reduced-transparency: reduce", "Knowledge Home must su
 requireText(css, "@supports not ((backdrop-filter", "Knowledge Home must provide a solid no-backdrop-filter fallback.");
 requireText(css, "forced-colors: active", "Knowledge Home must remain operable in forced-colors mode.");
 requireText(css, ".knowledge-module-wide", "Knowledge Home must support approved module sizing.");
-requireText(css, "glaze-surface-solid", "Knowledge Home content modules must use solid content surfaces.");
 
 forbidText(home, "fetch(\"http", "Knowledge Home must not introduce remote data dependencies.");
 forbidText(home, "https://", "Knowledge Home must not introduce remote service or asset dependencies.");
