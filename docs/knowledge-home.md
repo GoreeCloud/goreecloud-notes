@@ -8,13 +8,13 @@ The surface is inspired by useful knowledge-home information architecture seen i
 
 ## Current foundation
 
-The first source implementation is exposed through the local `#knowledge-home` application route and reads the authenticated user's existing GoreeCloud Notes data through the established owner-scoped API.
+The source implementation is exposed through the local `#knowledge-home` application route and reads the authenticated user's existing GoreeCloud Notes data through the established owner-scoped API.
 
 Implemented modules are:
 
 - Recent Notes, ordered by existing note update timestamps.
 - Pinned Notes, derived from native `is_pinned` state.
-- Scratch Pad, using session-scoped browser storage only.
+- Scratch Pad, using session-scoped browser storage for transient capture with explicit promotion into a normal Note.
 - Shortcuts, summarizing current Notes, notebooks, Archive, and Trash counts.
 - Tags, derived from the authenticated user's existing tag collection.
 
@@ -22,9 +22,21 @@ The Home customizer supports module visibility, ordering, and the currently supp
 
 ## Scratch Pad boundary
 
-Scratch Pad is deliberately transient. Its text is stored in `sessionStorage`, scoped to the active browser tab and authenticated user identifier, with a 4,000-character UI limit.
+Scratch Pad remains deliberately transient until the user chooses **Save as note**. Its working text is stored in `sessionStorage`, scoped to the active browser tab and authenticated user identifier, with a 4,000-character UI limit.
 
-It is not a second note database and is not represented as durable Notes content. Promotion from Scratch Pad into a normal native Note remains a separate implementation and validation step. Until that step exists, the UI says so rather than implying durability that the application does not provide.
+Saving creates one normal owner-scoped GoreeCloud Note through the existing authenticated and CSRF-protected Notes API. Initial title and document content are sent in the same note-creation request so promotion does not rely on an empty-note-then-patch sequence. The first non-empty Scratch Pad line supplies a bounded title and the complete captured text is converted through the native GoreeCloud document contract.
+
+The transient Scratch Pad copy is cleared only after the durable create request succeeds. If promotion fails, the captured text remains available in the current tab and the failure is surfaced to the user. The successful Note is immediately added to Knowledge Home's current-note state so Recent Notes and the current-note summary reflect it without requiring a reload.
+
+Scratch Pad is not a second note database and does not become durable merely because text exists in the transient capture field.
+
+## Platform-system boundary for Scratch Pad promotion
+
+This increment reuses the existing owner-scoped Notes authority rather than introducing a new product or control plane. GoreeCloud Identity remains represented by the established authenticated account/session boundary; the existing CSRF-protected Notes write path remains the security boundary for the create operation; no new sharing, external transfer, attachment, or cross-application data flow is introduced. Durable Notes continue to use the application's existing portability, export, and recovery path rather than a separate Scratch Pad persistence model.
+
+GoreeCloud Manager receives no new administrative operation in this increment. Privacy Shield and Wardveil Security responsibilities remain within the existing Notes data-flow and authenticated write controls. Everkeep continuity remains attached to normal Notes data. GoreeCloud Mesh is not invoked because Scratch Pad promotion is internal to Notes. Glaze UI applies to the new save/status controls and their adaptive/accessibility behavior.
+
+These statements describe the source-level boundary of this increment; they do not claim complete application-wide conformance with every current Platform System contract.
 
 ## Non-fabrication boundaries
 
@@ -46,21 +58,20 @@ This is a deliberate foundation behavior, not the final integrated navigation mo
 
 ## GLAZE UI treatment
 
-Knowledge Home uses the locally available Glaze semantic surface and interaction variables already present in GoreeCloud Notes. New Home content modules use solid content surfaces; glazed treatment is concentrated in transient top-level chrome. Covered Home controls use 48-pixel minimum targets, and the new surface includes compact safe-area handling, reduced-motion behavior, reduced-transparency and no-backdrop-filter fallbacks, and forced-colors behavior.
+Knowledge Home uses the locally available Glaze semantic surface and interaction variables already present in GoreeCloud Notes. New Home content modules use solid content surfaces; glazed treatment is concentrated in transient top-level chrome. Covered Home controls, including Scratch Pad's durable-save action, use 48-pixel minimum targets, and the surface includes compact safe-area handling, reduced-motion behavior, reduced-transparency and no-backdrop-filter fallbacks, and forced-colors behavior.
 
 This does not establish complete current GLAZE UI V1.0 conformance for GoreeCloud Notes. The broader application still requires canonical current-design-system reconciliation plus fresh exact-revision rendered, accessibility, resilience, layout, material, motion, interaction, performance, and representative-device acceptance before that claim is allowed.
 
 ## Validation contract
 
-`frontend/scripts/validate-knowledge-home.mjs` is part of the normal frontend production build. It fails closed if the implemented module set, transient/local state boundaries, non-fabrication statements, route/draft-preservation hooks, solid content-surface requirement, 48-pixel covered target requirement, safe-area behavior, or required accessibility/resilience fallbacks disappear.
+`frontend/scripts/validate-knowledge-home.mjs` is part of the normal frontend production build. It fails closed if the implemented module set, transient/local state boundaries, atomic Scratch Pad promotion contract, failure-preservation behavior, non-fabrication statements, route/draft-preservation hooks, solid content-surface requirement, 48-pixel covered target requirement, safe-area behavior, or required accessibility/resilience fallbacks disappear.
 
 This source validator supplements TypeScript, lint, build, and integration validation. It is not a substitute for rendered browser or real-device acceptance.
 
 ## Still open
 
-The following remain outside this first foundation checkpoint:
+The following remain outside this source checkpoint:
 
-- promotion of Scratch Pad text into a normal Note;
 - direct item-level navigation from Home cards into the primary workspace;
 - integration of Knowledge Home as the primary in-app Home destination under the unsaved-draft guard;
 - deterministic Suggested/Relevant Notes;
