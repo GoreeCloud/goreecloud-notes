@@ -7,6 +7,7 @@ const src = resolve(here, "../src");
 
 const home = readFileSync(resolve(src, "KnowledgeHome.tsx"), "utf8");
 const api = readFileSync(resolve(src, "api.ts"), "utf8");
+const app = readFileSync(resolve(src, "App.tsx"), "utf8");
 const css = readFileSync(resolve(src, "knowledge-home.css"), "utf8");
 const main = readFileSync(resolve(src, "main.tsx"), "utf8");
 
@@ -77,6 +78,21 @@ requireText(home, 'listNotes({ state: "archived" })', "Home must derive Archive 
 requireText(home, 'listNotes({ state: "trashed" })', "Home must derive Trash summary from the existing owner-scoped Notes API.");
 requireText(home, "glaze-surface-solid", "Knowledge Home content modules must use solid content surfaces.");
 
+requireText(home, 'href={`#note/${note.id}`}', "Knowledge Home cards must target the owner-note workspace route by native note ID.");
+requireText(home, 'className="knowledge-note-open"', "Knowledge Home cards must expose a dedicated direct-note control.");
+requireText(home, 'target="_blank" rel="noopener"', "Knowledge Home note links must preserve the Home tab and isolate the new workspace tab.");
+requireText(home, "Open note", "Knowledge Home cards must visibly label their direct-note action.");
+requireText(main, "const NOTE_ROUTE =", "Root must recognize the bounded note-specific workspace hash route.");
+requireText(main, "const initialNoteId = noteRouteMatch?.[1] ?? null;", "Root must pass only a syntactically bounded note ID into the workspace bootstrap.");
+requireText(main, "<App initialNoteId={initialNoteId} />", "Root must pass the note-specific route into the native Notes workspace.");
+requireText(app, "type AppProps = {", "The workspace must accept a bounded initial note target.");
+requireText(app, "async function loadInitialWorkspaceState(initialNoteId: string | null)", "The workspace must resolve direct-note initialization through a dedicated source boundary.");
+requireText(app, "const target = await getNote(initialNoteId);", "Direct-note initialization must revalidate the target through the owner-scoped Notes API.");
+requireText(app, "listNotes({ state: target.state })", "Direct-note initialization must use the target's current canonical lifecycle collection.");
+requireText(app, 'target.state === "archived" ? "archive" : target.state === "trashed" ? "trash" : "home"', "Direct-note initialization must preserve Archive and Trash lifecycle state.");
+requireText(app, "The requested Knowledge Home note is no longer available to this account.", "Unavailable direct-note targets must fail with a generic owner-safe message.");
+requireText(app, "const [initialNoteIdAtMount] = useState(initialNoteId);", "Direct-note bootstrap must not follow later hash changes into an already-mounted unsaved editor.");
+
 requireText(main, 'hash === "#knowledge-home"', "Root must expose the Knowledge Home route.");
 requireText(main, 'target="_blank"', "Knowledge Home launcher must preserve the current Notes tab while explicit Save remains authoritative.");
 requireText(main, "Open Knowledge Home in a new tab so the current Notes draft remains open", "Knowledge Home launcher must document draft-preservation behavior.");
@@ -84,6 +100,8 @@ requireText(main, 'from "./KnowledgeHome"', "Root must import the native Knowled
 requireText(main, 'import "./knowledge-home.css"', "Root must load Knowledge Home styling.");
 
 requireText(css, "min-height: 48px", "Covered Knowledge Home controls must meet the current 48px minimum target requirement.");
+requireText(css, ".knowledge-note-open", "Knowledge Home direct-note controls must have explicit Glaze interaction styling.");
+requireText(css, ".knowledge-note-open:focus-visible", "Knowledge Home direct-note controls must expose a visible keyboard focus treatment.");
 requireText(css, ".knowledge-scratch-actions .glaze-button", "Scratch Pad durable-save controls must use covered 48px targets.");
 requireText(css, ".knowledge-scratch-status", "Scratch Pad promotion must have visible success/error status styling.");
 requireText(css, "env(safe-area-inset-top)", "Compact Knowledge Home must account for device safe areas.");
@@ -98,6 +116,7 @@ forbidText(home, "https://", "Knowledge Home must not introduce remote service o
 forbidText(home, "OpenAI", "Knowledge Home must not imply an unimplemented AI dependency.");
 forbidText(home, "Gemini", "Knowledge Home must not imply an unimplemented AI dependency.");
 forbidText(home, "localStorage.setItem(\"goreecloud.notes.relevance", "Relevant Notes must not introduce behavioral or derived-ranking persistence.");
+forbidText(app, "document.querySelector", "Direct-note workspace routing must not locate notes through DOM state.");
 
 if (failures.length > 0) {
   console.error("Knowledge Home validation failed:\n" + failures.map((failure) => `- ${failure}`).join("\n"));
