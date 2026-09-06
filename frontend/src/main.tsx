@@ -20,6 +20,8 @@ import "./glaze-foundation.css";
 
 initializeAppearancePreference();
 
+const NOTE_ROUTE = /^#note\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
+
 function Root() {
   const [hash, setHash] = useState(window.location.hash);
 
@@ -34,6 +36,8 @@ function Root() {
 
   const accountSecurityOpen = hash === "#account-security";
   const knowledgeHomeOpen = hash === "#knowledge-home";
+  const noteRouteMatch = hash.match(NOTE_ROUTE);
+  const initialNoteId = noteRouteMatch?.[1] ?? null;
 
   function openWorkspace() {
     window.location.hash = "";
@@ -41,7 +45,7 @@ function Root() {
 
   return (
     <div className="notes-root glaze-canvas">
-      {accountSecurityOpen ? <AccountSecurityPage /> : knowledgeHomeOpen ? <KnowledgeHome onOpenWorkspace={openWorkspace} /> : <App />}
+      {accountSecurityOpen ? <AccountSecurityPage /> : knowledgeHomeOpen ? <KnowledgeHome onOpenWorkspace={openWorkspace} /> : <App initialNoteId={initialNoteId} />}
       <aside className="glaze-utility-dock glaze-overlay" aria-label="Application controls">
         <AppearanceControl />
         {!accountSecurityOpen ? knowledgeHomeOpen ? (

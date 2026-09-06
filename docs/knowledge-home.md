@@ -19,6 +19,8 @@ Implemented modules are:
 - Shortcuts, summarizing current Notes, notebooks, Archive, and Trash counts.
 - Tags, derived from the authenticated user's existing tag collection.
 
+Recent, Relevant, and Pinned note cards expose a direct **Open note** action. That action targets the native Notes workspace with the note's existing ID rather than reproducing note content or creating a Home-specific document authority.
+
 The Home customizer supports module visibility, ordering, and the currently supported standard/wide size choice. These are presentation preferences stored locally in the browser under a user-specific key; they are not server-authoritative knowledge state and are not exported as Notes data.
 
 ## Relevant Notes boundary
@@ -49,9 +51,9 @@ Scratch Pad is not a second note database and does not become durable merely bec
 
 ## Platform-system boundary for Knowledge Home
 
-These increments reuse the existing owner-scoped Notes authority rather than introducing a new product or control plane. GoreeCloud Identity remains represented by the established authenticated account/session boundary; the existing CSRF-protected Notes write path remains the security boundary for Scratch Pad note creation; no new sharing, external transfer, attachment, or cross-application data flow is introduced by Relevant Notes.
+These increments reuse the existing owner-scoped Notes authority rather than introducing a new product or control plane. GoreeCloud Identity remains represented by the established authenticated account/session boundary; the existing CSRF-protected Notes write path remains the security boundary for Scratch Pad note creation; no new sharing, external transfer, attachment, or cross-application data flow is introduced by Relevant Notes or direct note navigation.
 
-GoreeCloud Manager receives no new administrative operation. Privacy Shield and Wardveil Security responsibilities remain within the existing Notes data-flow and authenticated write controls. Relevant Notes adds no behavioral profile or persisted recommendation state. Everkeep continuity remains attached to normal Notes data rather than Home presentation/ranking state. GoreeCloud Mesh is not invoked by the local relevance module or Scratch Pad promotion because both are internal to Notes. GLAZE UI V1.0 remains the mandatory application design target for the new module and controls.
+GoreeCloud Manager receives no new administrative operation. Privacy Shield and Wardveil Security responsibilities remain within the existing Notes data-flow and authenticated read/write controls. Relevant Notes adds no behavioral profile or persisted recommendation state. Direct note navigation revalidates the requested note through the existing owner-scoped Notes API rather than trusting Home presentation state. Everkeep continuity remains attached to normal Notes data rather than Home presentation/ranking/routing state. GoreeCloud Mesh is not invoked by the local relevance module, Scratch Pad promotion, or internal Notes navigation because these are all within Notes. GLAZE UI V1.0 remains the mandatory application design target for the modules and controls.
 
 These statements describe source-level boundaries only; they do not claim complete application-wide acceptance with every current Platform System contract.
 
@@ -64,23 +66,29 @@ The approved product direction includes additional modules, but this checkpoint 
 
 GoreeCloud Notes does not create duplicate Tasks or Calendar stores for Knowledge Home.
 
-## Draft-safety boundary
+## Draft-safety and direct-note navigation boundary
 
 The current editor uses explicit conflict-safe Save. Opening a different in-tab application surface can therefore discard an unsaved editor component if it is unmounted without passing through the established navigation guard.
 
-For this checkpoint, the Notes utility launcher opens Knowledge Home in a new browser tab with `noopener`. The active Notes tab and any local editor draft remain mounted. Knowledge Home can then return to the Notes workspace within its own tab.
+The Notes utility launcher opens Knowledge Home in a new browser tab with `noopener`, so the active Notes tab and any local editor draft remain mounted. Knowledge Home note-card **Open note** actions also open a separate workspace tab with `noopener`. This preserves the original Home tab and its tab-scoped Scratch Pad instead of unmounting that transient capture state.
 
-This is a deliberate foundation behavior, not the final integrated navigation model. A later primary-home integration must participate directly in the established unsaved-draft navigation contract before it replaces this separate-tab boundary.
+The direct workspace route is a same-origin `#note/<note-id>` route accepted only for the bounded UUID-shaped note identifier emitted by Knowledge Home. The new workspace does not trust the Home card as note authority: it resolves the requested ID again through the existing authenticated owner-scoped `getNote` API, loads the note's current canonical lifecycle collection, and opens the target in Home, Archive, or Trash according to its current state. If the note moved after Home rendered, the destination therefore follows the current server state rather than the stale card state.
+
+If the owner-scoped target no longer exists or is not available to the current account, the workspace falls back to the normal current-notes collection and shows the generic message **The requested Knowledge Home note is no longer available to this account.** It does not disclose whether a matching identifier belongs to another owner.
+
+Direct note navigation does not route by title, DOM lookup, external URL, copied note content, a new backend route, or a second persistence layer. The initial note ID is captured only at workspace mount so later hash changes do not silently redirect an already-mounted editor containing unsaved work.
+
+This still is not the final primary-home integration model. Replacing the current workspace Home navigation with Knowledge Home inside the same mounted application must participate directly in the established unsaved-draft navigation contract before that replacement is approved.
 
 ## GLAZE UI treatment
 
-Knowledge Home uses the locally available GLAZE UI V1.0 semantic surface and interaction variables already present in GoreeCloud Notes. New Home content modules use solid content surfaces; glazed treatment is concentrated in transient top-level chrome. Covered Home controls, including Scratch Pad's durable-save action, use 48-pixel minimum targets, and the surface includes compact safe-area handling, reduced-motion behavior, reduced-transparency and no-backdrop-filter fallbacks, and forced-colors behavior.
+Knowledge Home uses the locally available GLAZE UI V1.0 semantic surface and interaction variables already present in GoreeCloud Notes. New Home content modules use solid content surfaces; glazed treatment is concentrated in transient top-level chrome. Covered Home controls, including Scratch Pad's durable-save action and direct-note actions, use 48-pixel minimum targets. Direct-note actions also provide explicit keyboard focus treatment. The surface includes compact safe-area handling, reduced-motion behavior, reduced-transparency and no-backdrop-filter fallbacks, and forced-colors behavior.
 
 This does not establish complete current GLAZE UI V1.0 conformance for GoreeCloud Notes. The broader application still requires canonical current-design-system reconciliation plus fresh exact-revision rendered, accessibility, resilience, layout, material, motion, interaction, performance, and representative-device acceptance before that claim is allowed.
 
 ## Validation contract
 
-`frontend/scripts/validate-knowledge-home.mjs` is part of the normal frontend production build. It fails closed if the implemented module set, transparent deterministic Relevant Notes ranking, transient/local state boundaries, atomic Scratch Pad promotion contract, storage-aware cleanup and failure-preservation behavior, non-fabrication statements, route/draft-preservation hooks, solid content-surface requirement, 48-pixel covered target requirement, safe-area behavior, or required accessibility/resilience fallbacks disappear.
+`frontend/scripts/validate-knowledge-home.mjs` is part of the normal frontend production build. It fails closed if the implemented module set, transparent deterministic Relevant Notes ranking, transient/local state boundaries, atomic Scratch Pad promotion contract, storage-aware cleanup and failure-preservation behavior, direct owner-note routing/revalidation/lifecycle behavior, generic unavailable-target handling, non-fabrication statements, route/draft-preservation hooks, solid content-surface requirement, 48-pixel covered target requirement, keyboard focus treatment, safe-area behavior, or required accessibility/resilience fallbacks disappear.
 
 Exact pull-request validation evidence belongs in pull-request and canonical GoreeCloud project records, not as a self-referential current-head value in this repository file.
 
@@ -90,7 +98,6 @@ This source validator and CI evidence supplement TypeScript, lint, build, and in
 
 The following remain outside this source checkpoint:
 
-- direct item-level navigation from Home cards into the primary workspace;
 - integration of Knowledge Home as the primary in-app Home destination under the unsaved-draft guard;
 - provenance-backed Recently Captured;
 - GoreeCloud Mesh-backed Tasks and Calendar modules;

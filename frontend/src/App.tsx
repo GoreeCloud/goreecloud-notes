@@ -43,6 +43,17 @@ import { RichNoteEditor } from "./RichNoteEditor";
 type WorkspaceView = "home" | "notebook" | "tag" | "archive" | "trash" | "notebooks" | "tags";
 type SaveState = "Saved" | "Saving…" | "Not saved" | "Conflict";
 
+type AppProps = {
+  initialNoteId?: string | null;
+};
+
+type InitialWorkspaceState = {
+  notes: Note[];
+  selected: Note | null;
+  view: WorkspaceView;
+  warning: string;
+};
+
 function SourceLink() {
   return <a className="source-link" href="https://github.com/GoreeCloud/goreecloud-notes">Source code</a>;
 }
@@ -66,6 +77,31 @@ function sortTags(items: Tag[]): Tag[] {
 
 function displayColor(value: string | null): string {
   return value && /^#[0-9a-fA-F]{6}$/.test(value) ? value : "#5b7cfa";
+}
+
+async function loadInitialWorkspaceState(initialNoteId: string | null): Promise<InitialWorkspaceState> {
+  if (!initialNoteId) {
+    const loaded = await listNotes();
+    return { notes: loaded, selected: loaded[0] ?? null, view: "home", warning: "" };
+  }
+
+  try {
+    const target = await getNote(initialNoteId);
+    const targetView: WorkspaceView = target.state === "archived" ? "archive" : target.state === "trashed" ? "trash" : "home";
+    const loaded = await listNotes({ state: target.state });
+    const notes = loaded.some((note) => note.id === target.id) ? loaded : [target, ...loaded];
+    return { notes, selected: target, view: targetView, warning: "" };
+  } catch (caught) {
+    if (caught instanceof ApiError && caught.status === 404) {
+      return {
+        notes: await listNotes(),
+        selected: null,
+        view: "home",
+        warning: "The requested Knowledge Home note is no longer available to this account.",
+      };
+    }
+    throw caught;
+  }
 }
 
 function blockedNotebookParents(notebook: Notebook, notebooks: Notebook[]): Set<string> {
@@ -267,7 +303,8 @@ function LoginScreen({ onAuthenticated }: LoginScreenProps) {
   );
 }
 
-function App() {
+function App({ initialNoteId = null }: AppProps) {
+  const [initialNoteIdAtMount] = useState(initialNoteId);
   const [authState, setAuthState] = useState<"loading" | "authenticated" | "unauthenticated">("loading");
   const [user, setUser] = useState<CurrentUser | null>(null);
   const [notes, setNotes] = useState<Note[]>([]);
@@ -356,37 +393,49 @@ function App() {
   }
 
   async function hydrateWorkspace(authenticatedUser: CurrentUser) {
-    const [loadedNotes, loadedNotebooks, loadedTags] = await Promise.all([listNotes(), listNotebooks(), listTags()]);
+    const [initialWorkspace, loadedNotebooks, loadedTags] = await Promise.all([
+      loadInitialWorkspaceState(initialNoteIdAtMount),
+      listNotebooks(),
+      listTags(),
+    ]);
     setUser(authenticatedUser);
-    setNotes(loadedNotes);
+    setNotes(initialWorkspace.notes);
     setNotebooks(sortNotebooks(loadedNotebooks));
     setTags(sortTags(loadedTags));
+    setView(initialWorkspace.view);
+    setFilterId(null);
     setSearch("");
     setSearchResults(null);
     setSearchError("");
     setAuthState("authenticated");
-    await openNote(loadedNotes[0] ?? null);
+    await openNote(initialWorkspace.selected);
+    if (initialWorkspace.warning) setError(initialWorkspace.warning);
   }
 
   useEffect(() => {
     let cancelled = false;
     async function bootstrap() {
       try {
-        const currentUser = await getCurrentUser();
-        const [loadedNotes, loadedNotebooks, loadedTags] = await Promise.all([listNotes(), listNotebooks(), listTags()]);
+        const [currentUser, initialWorkspace, loadedNotebooks, loadedTags] = await Promise.all([
+          getCurrentUser(),
+          loadInitialWorkspaceState(initialNoteIdAtMount),
+          listNotebooks(),
+          listTags(),
+        ]);
         if (cancelled) return;
         setUser(currentUser);
-        setNotes(loadedNotes);
+        setNotes(initialWorkspace.notes);
         setNotebooks(sortNotebooks(loadedNotebooks));
         setTags(sortTags(loadedTags));
+        setView(initialWorkspace.view);
+        setFilterId(null);
         setAuthState("authenticated");
-        const first = loadedNotes[0] ?? null;
-        applyEditorNote(first);
-        if (first) {
+        applyEditorNote(initialWorkspace.selected);
+        if (initialWorkspace.selected) {
           const [assignedTags, noteAttachments, noteRevisions] = await Promise.all([
-            listNoteTags(first.id),
-            listAttachments(first.id),
-            listNoteRevisions(first.id),
+            listNoteTags(initialWorkspace.selected.id),
+            listAttachments(initialWorkspace.selected.id),
+            listNoteRevisions(initialWorkspace.selected.id),
           ]);
           if (!cancelled) {
             setActiveNoteTags(assignedTags);
@@ -394,6 +443,7 @@ function App() {
             setRevisions(noteRevisions);
           }
         }
+        if (!cancelled && initialWorkspace.warning) setError(initialWorkspace.warning);
       } catch (caught) {
         if (cancelled) return;
         if (!(caught instanceof ApiError && caught.status === 401)) setError(messageFromError(caught));
@@ -402,7 +452,7 @@ function App() {
     }
     void bootstrap();
     return () => { cancelled = true; };
-  }, []);
+  }, [initialNoteIdAtMount]);
 
   useEffect(() => {
     const query = search.trim();

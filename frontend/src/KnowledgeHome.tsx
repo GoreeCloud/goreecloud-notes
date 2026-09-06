@@ -142,14 +142,18 @@ function scratchNoteTitle(value: string): string {
 }
 
 function HomeNoteCard({ note }: { note: Note }) {
+  const noteTitle = note.title || "Untitled";
   return (
     <article className="knowledge-note-card glaze-surface-solid">
       <div className="knowledge-note-card-heading">
-        <h3>{note.title || "Untitled"}</h3>
+        <h3>{noteTitle}</h3>
         {note.is_pinned ? <span className="knowledge-pin" aria-label="Pinned">Pinned</span> : null}
       </div>
       <p>{noteExcerpt(note)}</p>
-      <time dateTime={note.updated_at}>{new Date(note.updated_at).toLocaleString()}</time>
+      <div className="knowledge-note-card-footer">
+        <time dateTime={note.updated_at}>{new Date(note.updated_at).toLocaleString()}</time>
+        <a className="knowledge-note-open" href={`#note/${note.id}`} target="_blank" rel="noopener" aria-label={`Open ${noteTitle} in the Notes workspace in a new tab`}>Open note</a>
+      </div>
     </article>
   );
 }
