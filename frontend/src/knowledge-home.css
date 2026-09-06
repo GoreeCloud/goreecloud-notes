@@ -27,7 +27,8 @@
 .knowledge-customizer header,
 .knowledge-scratch-footer,
 .knowledge-scratch-actions,
-.knowledge-home-footer {
+.knowledge-home-footer,
+.knowledge-note-card-footer {
   display: flex;
   align-items: center;
 }
@@ -71,6 +72,7 @@
   gap: 8px;
 }
 
+.knowledge-note-open,
 .knowledge-home-actions .glaze-button,
 .knowledge-home-state .glaze-button,
 .knowledge-home-footer button,
@@ -212,8 +214,10 @@
 }
 
 .knowledge-note-card {
+  display: flex;
   min-height: 152px;
   padding: 16px;
+  flex-direction: column;
   border-radius: var(--glaze-radius-lg);
 }
 
@@ -237,6 +241,7 @@
   display: -webkit-box;
   overflow: hidden;
   margin: 12px 0 18px;
+  flex: 1;
   color: var(--glaze-muted);
   font-size: 0.88rem;
   line-height: 1.5;
@@ -247,6 +252,28 @@
 .knowledge-note-card time {
   color: var(--glaze-muted);
   font-size: 0.74rem;
+}
+
+.knowledge-note-card-footer {
+  min-height: 48px;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.knowledge-note-open {
+  display: inline-flex;
+  padding: 0 10px;
+  align-items: center;
+  border-radius: var(--glaze-radius-control);
+  color: var(--glaze-accent);
+  text-decoration: none;
+  font-size: 0.8rem;
+  font-weight: 750;
+}
+
+.knowledge-note-open:focus-visible {
+  outline: var(--glaze-focus-width) solid var(--glaze-accent);
+  outline-offset: var(--glaze-focus-offset);
 }
 
 .knowledge-pin,
@@ -454,6 +481,7 @@
 }
 
 @media (hover: hover) and (pointer: fine) {
+  .knowledge-note-open:hover,
   .knowledge-shortcuts button:hover,
   .knowledge-customizer-row button:hover:not(:disabled) {
     border-color: color-mix(in srgb, var(--glaze-accent) 28%, var(--glaze-line));
@@ -584,6 +612,7 @@
   .knowledge-customizer,
   .knowledge-home-state,
   .knowledge-note-card,
+  .knowledge-note-open,
   .knowledge-shortcuts button,
   .knowledge-customizer-row,
   .knowledge-customizer-row button,
