@@ -1,0 +1,93 @@
+{
+  "schema": "goreecloud.notes.mobile-client-readiness/v1",
+  "product": "GoreeCloud Notes",
+  "lifecycle": "development",
+  "authority": {
+    "project_record": "GoreeCloud/Projects/Project Specification — Notes",
+    "milestone": "Milestone 5 — Mobility and Offline Work"
+  },
+  "android": {
+    "status": "blocked-prerequisites",
+    "production_capable": false,
+    "stable_eligible": false,
+    "package_identity_accepted": false,
+    "implementation_started": false
+  },
+  "prerequisites": {
+    "mobile_api_contract": {
+      "accepted": false,
+      "required": true,
+      "evidence": [],
+      "notes": "Versioned owner-scoped native client API with bounded list/detail/mutation contracts is not yet accepted."
+    },
+    "native_identity_binding": {
+      "accepted": false,
+      "required": true,
+      "evidence": [],
+      "notes": "Native GoreeCloud Identity session exchange and Notes audience/owner binding are not yet accepted."
+    },
+    "incremental_sync_and_conflicts": {
+      "accepted": false,
+      "required": true,
+      "evidence": [],
+      "notes": "Revision/change tokens, incremental synchronization, tombstones, retries, conflict resolution, and offline reconciliation are not yet accepted."
+    },
+    "attachment_transfer": {
+      "accepted": false,
+      "required": true,
+      "evidence": [],
+      "notes": "Native attachment upload/download, integrity, bounded retry/resume, and cache semantics are not yet accepted."
+    },
+    "local_data_protection": {
+      "accepted": false,
+      "required": true,
+      "evidence": [],
+      "notes": "Native local cache/storage minimization, protection, revocation, diagnostics, and recovery boundaries are not yet accepted."
+    },
+    "privacy_shield": {
+      "accepted": false,
+      "required": true,
+      "evidence": [],
+      "notes": "Android-specific Privacy Shield runtime authorization and minimization acceptance are not established."
+    },
+    "wardveil_security": {
+      "accepted": false,
+      "required": true,
+      "evidence": [],
+      "notes": "Android-specific Wardveil Security runtime acceptance is not established."
+    },
+    "everkeep": {
+      "accepted": false,
+      "required": true,
+      "evidence": [],
+      "notes": "Android continuity/recovery behavior and clean-target restore boundaries are not accepted."
+    },
+    "goreecloud_sync": {
+      "accepted": false,
+      "required": true,
+      "evidence": [],
+      "notes": "GoreeCloud Sync acceptance is distinct from ordinary API reads, local caching, and Everkeep recovery and is not established."
+    },
+    "glaze_ui_current_stable": {
+      "accepted": false,
+      "required": true,
+      "evidence": [],
+      "notes": "Android must start on the then-current Stable GLAZE UI baseline and requires independent application acceptance."
+    },
+    "representative_android_acceptance": {
+      "accepted": false,
+      "required": true,
+      "evidence": [],
+      "notes": "Physical-device, accessibility, input, performance, battery/network-failure, signing, rollback, and release evidence are not established."
+    }
+  },
+  "invariants": {
+    "backend_authorization_remains_authoritative": true,
+    "browser_cookie_reuse_for_native_authentication_allowed": false,
+    "embedded_reusable_service_credentials_allowed": false,
+    "client_selected_owner_authority_allowed": false,
+    "offline_cache_is_authoritative_store": false,
+    "sync_equals_backup": false,
+    "missing_evidence_may_be_presented_as_acceptance": false
+  }
+}
