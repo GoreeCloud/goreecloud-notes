@@ -3,16 +3,18 @@
 **Record type:** Repository planned/open feature inventory  
 **Repository:** `GoreeCloud/goreecloud-notes`  
 **Lifecycle:** Development  
-**Migration state:** Candidate on `migration/repository-feature-records-20260922`; authoritative only after accepted merge to `main`.  
-**Evidence baseline:** authoritative `main` at `3b7fe544c01e0336c28daee050bfcc2a5d480ab8`; later Draft PRs remain candidate-only.  
+**Migration state:** Authoritative on `main`; legacy repository and Drive roadmap controls retired and verified.  
+**Accepted migration baseline:** `51025941488bfcfba4153076f95c1fd9cdc36a2f`; later Draft PRs remain candidate-only.  
 **Governing standard:** Standard — Repository Feature Tracking and Changelog Governance v1.0.
 
-## Purpose and migration sources
+## Purpose and migrated sources
 
-This file carries forward open, partial, blocked, acceptance-gated, and future obligations from:
-- the legacy root `FEATURE-ROADMAP.md`;
-- the Drive roadmap `GoreeCloud/Feature Roadmap/GoreeCloud Notes/FEATURE-ROADMAP.docx` (file ID `1lQVN24S-54yY6qfPXvWkDhYf62dZQA5B`);
-- authoritative `main` repository state.
+This file carries forward open, partial, blocked, acceptance-gated, and future obligations migrated from:
+- the retired root `FEATURE-ROADMAP.md`;
+- the retired Drive roadmap `GoreeCloud/Feature Roadmap/GoreeCloud Notes/FEATURE-ROADMAP.docx` (former file ID `1lQVN24S-54yY6qfPXvWkDhYf62dZQA5B`);
+- authoritative repository state.
+
+The mapped Drive roadmap was permanently deleted only after the repository-native records were accepted on `main`, the legacy root roadmap was absent, and exact-main governance validation passed. Independent Drive readback returned 404 Not Found.
 
 Open Draft PRs remain candidate evidence only. Their code, tests, and documentation are not accepted implementation until merged and verified on authoritative `main`.
 
@@ -45,8 +47,8 @@ The open Draft stack also contains candidate-only Browser capture contracts, one
 
 ## Repository-governance obligations
 
-- Do not recreate `FEATURE-ROADMAP.md` after verified migration retirement.
-- Do not create, synchronize, mirror, or retain a Notes roadmap or changelog in Google Drive after the applicable migration source is successfully retired.
+- Do not recreate `FEATURE-ROADMAP.md`.
+- Do not recreate, synchronize, mirror, or retain a Notes roadmap or changelog in Google Drive.
 - Keep `IMPLEMENTED-FEATURES.md`, this file, and `CHANGELOGS.md` synchronized with accepted `main` lifecycle truth.
 - Preserve Draft/candidate evidence without promoting it to implemented state.
 - Keep Android fail-closed until the defined API, Identity, synchronization, attachment, local-data, privacy/security/recovery, GLAZE UI, device, and release gates are actually satisfied.
