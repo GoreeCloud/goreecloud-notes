@@ -1,0 +1,34 @@
+name: Repository feature records
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: repository-feature-records-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Validate repository feature and changelog records
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s IMPLEMENTED-FEATURES.md
+          test -s PLANNED-FEATURES.md
+          test -s CHANGELOGS.md
+          test ! -e FEATURE-ROADMAP.md
+          ! grep -R --line-number --fixed-strings 'must remain materially synchronized with one another' . \
+            --exclude-dir=.git \
+            --exclude=repository-feature-records.yml || exit 1
