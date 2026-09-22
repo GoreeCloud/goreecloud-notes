@@ -3,8 +3,8 @@
 **Record type:** Repository implemented-feature inventory  
 **Repository:** `GoreeCloud/goreecloud-notes`  
 **Lifecycle:** Development  
-**Migration state:** Candidate on `migration/repository-feature-records-20260922`; authoritative only after accepted merge to `main`.  
-**Evidence baseline:** authoritative `main` at `3b7fe544c01e0336c28daee050bfcc2a5d480ab8`.  
+**Migration state:** Authoritative on `main`; legacy repository and Drive roadmap controls retired and verified.  
+**Accepted migration baseline:** `51025941488bfcfba4153076f95c1fd9cdc36a2f`.  
 **Governing standard:** Standard — Repository Feature Tracking and Changelog Governance v1.0.
 
 ## Interpretation
@@ -23,8 +23,11 @@ GoreeCloud Notes remains Development. Source or CI evidence on Draft branches do
 ### Licensing
 - The repository declares GNU Affero General Public License version 3 only (`AGPL-3.0-only`) and contains the corresponding repository license record.
 
-### Governance baseline
-- Root `FEATURE-ROADMAP.md` is the legacy repository-side roadmap control currently being migrated by this branch.
+### Repository-native feature/change governance
+- Root `IMPLEMENTED-FEATURES.md`, `PLANNED-FEATURES.md`, and `CHANGELOGS.md` are the repository-native feature/change records.
+- Legacy root `FEATURE-ROADMAP.md` is retired and absent from authoritative `main`.
+- The mapped Drive Notes roadmap source, file ID `1lQVN24S-54yY6qfPXvWkDhYf62dZQA5B`, was permanently retired only after authoritative-main readback and exact-main governance validation passed; independent Drive readback returned 404 Not Found.
+- No dedicated `Change Log — Notes` Drive source was resolved during the bounded migration, so no unidentified Drive changelog deletion is claimed.
 - Accepted `main` documents that active application development occurs through reviewed feature branches and pull requests rather than direct feature implementation on `main`.
 
 ## Explicitly not accepted on current `main`
